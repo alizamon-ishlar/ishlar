@@ -75,6 +75,15 @@
   .mud.m-bugun{background:#ffe2c7;color:#a13d00}
   .mud.m-qizil{background:#fde2e2;color:#b3161d}
   .mud.m-tugadi{background:var(--chip);color:var(--mut)}
+  .mud.m-tek{background:#e1ecfb;color:#1d4f91}
+  .item.m-tek{border-left:5px solid #3a7bd5}
+  .tekbtn{display:block;width:calc(100% - 34px);margin:8px 0 0 34px;padding:10px;border-radius:10px;
+    border:1px dashed #3a7bd5;background:transparent;color:#2d6bc4;font-size:14px;font-weight:600}
+  .tekqator{display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--chip)}
+  .tekqator input[type=checkbox]{width:22px;height:22px;flex:none}
+  .tekqator label{margin:0;font-size:15px;color:var(--ink);flex:1}
+  .tekqator input[type=date]{width:auto;flex:none;padding:8px}
+  @media (prefers-color-scheme: dark){ .mud.m-tek{background:#1b2c45;color:#8fb8f0} }
   .item.m-yashil{border-left:5px solid #2e9e5b} .item.m-sariq{border-left:5px solid #e0a800}
   .item.m-bugun{border-left:5px solid #f07a1a} .item.m-qizil{border-left:5px solid #d92d2d}
   @media (prefers-color-scheme: dark){
@@ -208,6 +217,11 @@
           <div><label>Kelgan sana</label><input name="kelgan" type="date"></div>
           <div><label>Bajarish muddati</label><input name="muddat" type="date"></div>
         </div>
+        <div class="tekqator">
+          <input type="checkbox" id="tekCh" onchange="tekCheck(this)">
+          <label for="tekCh">🔍 Binoga borib tekshirildi</label>
+          <input name="tekshirildi" type="date" onchange="$('tekCh').checked=!!this.value">
+        </div>
       </div>
 
       <div class="card">
@@ -325,21 +339,24 @@ function holat(r){
   const q = num(r.qoldiq!=='' && r.qoldiq!=null ? r.qoldiq : (num(r.summa)!=null ? num(r.summa)-(num(r.tushgan)||0) : null));
   const k = kunQoldi(r.muddat);
   const tugagan = !!String(r.xulosa||'').trim();
-  return { q, k, tugagan, qarz: q!=null && q>0, kechikkan: !tugagan && k!=null && k<0, yaqin: !tugagan && k!=null && k>=0 && k<=3 };
+  const tek = !tugagan && !!r.tekshirildi;          // tekshirilgan, xulosa kutilmoqda
+  const kuzat = !tugagan && !tek;                  // muddat nazoratidagi ishlar
+  return { q, k, tugagan, tek, qarz: q!=null && q>0, kechikkan: kuzat && k!=null && k<0, yaqin: kuzat && k!=null && k>=0 && k<=3 };
 }
 
 /* Bajarish muddati: yashil — vaqt bor, sariq — 1–3 kun qoldi, to'q sariq — bugun, qizil — o'tib ketgan */
 function muddatHolat(r, h){
-  if (!r.muddat) return null;
+  if (!r.muddat && !h.tek) return null;
   const sana = sanaUz(r.muddat), k = h.k;
   if (h.tugagan) return { cls:'m-tugadi', chap:'✓ Muddat: '+sana, ong:'Bajarilgan' };
+  if (h.tek)     return { cls:'m-tek', chap:'🔍 Tekshirildi: '+sanaUz(r.tekshirildi), ong:'Xulosa kutilmoqda' };
   if (k < 0)   return { cls:'m-qizil',  chap:'🔴 Muddat o\'tdi: '+sana, ong:(-k)+' kun kechikdi' };
   if (k === 0) return { cls:'m-bugun',  chap:'🟠 Muddat BUGUN: '+sana, ong:'Bugun topshirish kerak' };
   if (k <= 3)  return { cls:'m-sariq',  chap:'🟡 Muddat: '+sana, ong:k+' kun qoldi' };
   return { cls:'m-yashil', chap:'🟢 Muddat: '+sana, ong:k+' kun qoldi' };
 }
 
-const FILTRLAR = [['hammasi','Hammasi'],['bugun','Bugun muddat'],['jarayonda','Jarayonda'],['kechikkan','Muddati o\'tgan'],['qarz','Qoldiq bor'],['tugagan','Xulosa berilgan']];
+const FILTRLAR = [['hammasi','Hammasi'],['bugun','Bugun muddat'],['jarayonda','Jarayonda'],['kechikkan','Muddati o\'tgan'],['tek','Xulosa kutilmoqda'],['qarz','Qoldiq bor'],['tugagan','Xulosa berilgan']];
 function chiz(){
   const q = $('q').value.trim().toLowerCase();
   let jamiQ=0, jarayon=0, kech=0;
@@ -347,7 +364,7 @@ function chiz(){
   $('stats').innerHTML = `<div class="stat"><b>${DATA.length}</b><small>Jami ish</small></div>
     <div class="stat"><b>${jarayon}</b><small>Jarayonda${kech?` · <span style="color:var(--bad)">${kech} kechikkan</span>`:''}</small></div>
     <div class="stat"><b>${jamiQ?Math.round(jamiQ/1e6*10)/10+' mln':'0'}</b><small>Umumiy qoldiq</small></div>`;
-  const bugungi = DATA.filter(r=>{const h=holat(r); return !h.tugagan && h.k===0;});
+  const bugungi = DATA.filter(r=>{const h=holat(r); return !h.tugagan && !h.tek && h.k===0;});
   let og = '';
   if (bugungi.length) og += `<div class="ogoh bugun" onclick="FILTR='bugun';chiz()">🔔 Bugun muddati tugaydi: ${bugungi.length} ta ish<small>Ko'rish ›</small></div>`;
   if (kech) og += `<div class="ogoh otgan" onclick="FILTR='kechikkan';chiz()">⚠ Muddati o'tgan: ${kech} ta ish<small>Ko'rish ›</small></div>`;
@@ -360,7 +377,8 @@ function chiz(){
     if (FILTR==='kechikkan' && !h.kechikkan) return false;
     if (FILTR==='qarz' && !h.qarz) return false;
     if (FILTR==='tugagan' && !h.tugagan) return false;
-    if (FILTR==='bugun' && !(h.k===0 && !h.tugagan)) return false;
+    if (FILTR==='bugun' && !(h.k===0 && !h.tugagan && !h.tek)) return false;
+    if (FILTR==='tek' && !h.tek) return false;
     if (!q) return true;
     return [r.n,r.obyekt,r.buyurtmachi,r.telefon,r.ariza,r.xulosa,r.shartnoma,r.izoh].join(' ').toLowerCase().includes(q);
   }).slice().reverse();
@@ -378,6 +396,7 @@ function chiz(){
       <div class="top"><span class="no">${esc(r.n)}</span><span class="ttl">${esc(r.obyekt)}</span></div>
       <div class="sub">${esc(r.buyurtmachi||'—')}${r.kelgan?' · '+sanaUz(r.kelgan):''}</div>
       ${m?`<div class="mud ${m.cls}"><span>${m.chap}</span><small>${m.ong}</small></div>`:''}
+      ${!h.tugagan && !h.tek ? `<button class="tekbtn" onclick="tekBelgila(${r.row})">🔍 Binoga borib tekshirildi — belgilash</button>` : ''}
       <div class="tags">${tags.join('')}</div>
       <div class="acts">
         ${tel?`<a href="tel:${tel}">📞 Qo'ng'iroq</a>`:''}
@@ -399,6 +418,7 @@ function ochForm(row){
     e.summa.value = r.summa===''||r.summa==null?'':Number(r.summa).toLocaleString('ru-RU');
     e.tushgan.value = r.tushgan===''||r.tushgan==null?'':Number(r.tushgan).toLocaleString('ru-RU');
     geoMatn(r.lat && r.lng ? {lat:r.lat,lng:r.lng} : null, r.lat ? 'Saqlangan joylashuv' : null);
+    e.tekshirildi.value = r.tekshirildi || ''; $('tekCh').checked = !!r.tekshirildi;
   } else {
     e.row.value = ''; e.kelgan.value = bugun(); e.shSana.value = '';
     joylashuv(false);
@@ -449,6 +469,7 @@ async function saqla(){
   const rec = {};
   ['row','obyekt','hajm','lat','lng','buyurtmachi','telefon','ariza','xulosa','kelgan','muddat','shartnoma','shSana','izoh']
     .forEach(k=> rec[k]=e[k].value.trim());
+  rec.tekshirildi = e.tekshirildi.value || '';
   rec.summa = e.summa.value.replace(/[^\d]/g,'');
   rec.tushgan = e.tushgan.value.replace(/[^\d]/g,'');
   const fayl = e.fayl.files && e.fayl.files[0];
@@ -463,6 +484,19 @@ async function saqla(){
     } else toast('✓ Jadvalga saqlandi');
     korsat('listScr'); await yangila();
   } catch(err){ if(TOKEN) toast('Saqlanmadi: '+(err.message||err), 5000); }
+  band(false);
+}
+
+/* ---------- Binoga borib tekshirildi ---------- */
+function tekCheck(ch){ const e=F(); e.tekshirildi.value = ch.checked ? (e.tekshirildi.value || bugun()) : ''; }
+async function tekBelgila(row){
+  const r = DATA.find(x=>x.row===row); if (!r) return;
+  band(true);
+  try {
+    await server('tekshirildi', TOKEN, row, bugun());
+    r.tekshirildi = bugun(); chiz();
+    toast('🔍 Tekshirildi deb belgilandi — muddat eslatmasi endi kelmaydi', 3500);
+  } catch(e){ toast('Saqlanmadi: '+(e.message||e), 4000); }
   band(false);
 }
 
