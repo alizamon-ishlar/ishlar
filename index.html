@@ -419,7 +419,9 @@ function edoChiz(){
   $('edoList').innerHTML = rows.map(r=>{
     const h = edoHolat(r), m = edoMuddat(r, h);
     const ikon = r.tur==='Murojaat' ? '📨' : '📌';
-    const edoUrl = 'https://edo.ijro.uz/workflow/inbox/' + (r.tur==='Murojaat' ? 'for-appeal' : 'for-execution') + '/search';
+    // edo'da aynan shu hujjatni ochadi (rid/doc bo'lmasa — umumiy ro'yxatni)
+    const edoUrl = 'https://edo.ijro.uz/workflow/inbox/' + (r.tur==='Murojaat' ? 'for-appeal' : 'for-execution') + '/' +
+      (r.rid && r.doc ? encodeURIComponent(r.rid) + '/' + encodeURIComponent(r.doc) : 'search');
     const tags = [`<span class="tag">${ikon} ${esc(r.tur)}</span>`];
     if (r.ijrochilar) tags.push(`<span class="tag">👤 ${esc(r.ijrochilar)}</span>`);
     if (r.ishRow) tags.push(`<span class="tag ok">✓ Ishlarga qo'shilgan</span>`);
