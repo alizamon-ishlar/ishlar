@@ -154,27 +154,63 @@
   #busy div{width:42px;height:42px;border:4px solid #fff;border-top-color:transparent;
     border-radius:50%;animation:sp 1s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* v2: kirish, EDO ichki bo'limlar, fon yangilanishi */
+  #kirishScr{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;background:var(--pri);color:#fff}
+  #kirishScr h2{margin:0 0 4px;font-weight:600}
+  #kirishScr p{margin:0 0 18px;opacity:.85;font-size:14px;text-align:center;max-width:320px}
+  #kirishScr form{width:100%;max-width:320px}
+  #kirishScr input{background:#fff;color:#15202b;margin-bottom:10px;border:0}
+  #kirishScr button{width:100%;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:600;background:#fff;color:var(--pri)}
+  #kirishXabar{min-height:22px;font-size:14px;color:#ffd2d2;margin:4px 0 10px;text-align:center}
+  .pinChiq{margin-top:22px;background:transparent;border:0;color:#fff;opacity:.75;font-size:14px;text-decoration:underline}
+  header button.aylan{animation:sp 1s linear infinite}
+  .ebolim{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+  .ebolim button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:8px 4px;
+    font-size:13px;font-weight:600;line-height:1.25}
+  .ebolim button b{display:block;font-size:18px}
+  .ebolim button.on{background:var(--pri);border-color:var(--pri);color:#fff}
+  .ebolim button .qiz{color:var(--bad)} .ebolim button.on .qiz{color:#ffd2d2}
+  .yana{display:block;width:100%;margin:6px 0 20px;padding:12px;border-radius:12px;border:1px solid var(--line);
+    background:var(--card);color:var(--pri2);font-size:15px;font-weight:600}
+  .oflayn{background:#fff4d1;color:#8a5a00;border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:10px}
+  @media (prefers-color-scheme: dark){ .oflayn{background:#3d3212;color:#ffd666} }
 </style>
 </head>
 <body>
 
-<!-- ===== PIN ekrani ===== -->
-<section id="pinScr">
+<!-- ===== Bazaga kirish (bir marta) ===== -->
+<section id="kirishScr" class="hidden">
   <h2>Alizamon ishlar</h2>
-  <p>PIN-kodni kiriting</p>
+  <p>Bir marta kiring — keyin faqat PIN-kod so'raladi</p>
+  <form onsubmit="emailKirish();return false" autocomplete="on">
+    <input id="kEmail" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="kParol" type="password" placeholder="Parol" autocomplete="current-password" required>
+    <div id="kirishXabar"></div>
+    <button type="submit">Kirish</button>
+  </form>
+</section>
+
+<!-- ===== PIN ekrani ===== -->
+<section id="pinScr" class="hidden">
+  <h2>Alizamon ishlar</h2>
+  <p id="pinSarlavha">PIN-kodni kiriting</p>
   <div class="dots" id="dots"></div>
   <div id="pinMsg"></div>
   <div class="pad" id="pad"></div>
+  <button class="pinChiq" onclick="chiqish()">Akkauntdan chiqish</button>
 </section>
 
 <!-- ===== Ro'yxat ===== -->
 <section id="listScr" class="hidden">
   <header>
     <h1>Ishlar ro'yxati</h1>
-    <button onclick="yangila()">↻</button>
-    <button onclick="qulfla()">🔒</button>
+    <button id="yBtn" onclick="yangila()" aria-label="Yangilash">↻</button>
+    <button onclick="qulfla()" aria-label="Qulflash">🔒</button>
   </header>
   <main>
+    <div id="oflayn"></div>
     <div class="seg">
       <button id="segIsh" class="on" onclick="rejim('ish')">📋 Ishlar</button>
       <button id="segEdo" onclick="rejim('edo')">📥 EDO <span id="edoSon"></span></button>
@@ -187,11 +223,10 @@
       <div id="list"></div>
     </div>
     <div id="edoView" class="hidden">
+      <div class="ebolim" id="eBolim"></div>
       <div id="edoOgoh"></div>
-      <div class="stats" id="edoStats"></div>
-      <input class="search" id="eq" type="search" placeholder="Qidirish: raqam, kimdan, mazmun…" oninput="edoChiz()">
+      <input class="search" id="eq" type="search" placeholder="Qidirish: raqam, kimdan, mazmun…" oninput="EKOR=EBET;edoChiz()">
       <div class="filters" id="edoFilters"></div>
-      <div class="vaqt" id="edoVaqt"></div>
       <div id="edoList"></div>
     </div>
   </main>
@@ -285,13 +320,15 @@
 <div id="busy" class="hidden"><div></div></div>
 
 <script>
-/* ===== Google jadval bilan bog'lanish manzili (Apps Script /exec havolasi) ===== */
-const API_URL = 'https://script.google.com/macros/s/AKfycbzt8rACa66RkoR1VzCaA1oBVjyqGcXRtqoiK8-nN4pVm-LqDKUKpsfOu3M1AURrGigW/exec';
+/* ===== Baza (Supabase) — ochiq manzil va ochiq (anon) kalit; ma'lumotni faqat kirgan egasi ko'radi ===== */
+const SB_URL = 'https://sahaiisdilulydstrdwd.supabase.co';
+const SB_KEY = 'sb_publishable_NAddx0WzT3KsPRKASwuuHQ_vCdWVvxw';
 
-const PIN_LEN = 4;            // PIN uzunligi — Code.gs dagi PIN_KOD bilan bir xil bo'lsin
-const AUTO_QULF_DAQ = 5;      // shuncha daqiqa harakatsizlikdan keyin qulflanadi
+const PIN_LEN = 4;
+const AUTO_QULF_DAQ = 5;
+const MAX_URINISH = 5, BLOK_DAQ = 15;
 
-let TOKEN = null, DATA = [], FILTR = 'hammasi', pin = '';
+let DATA = [], EDO = [], FILTR = 'hammasi', pin = '', OCHIQ = false, pinYangi = null;
 const $ = id => document.getElementById(id);
 const F = () => $('f').elements;
 
@@ -299,169 +336,207 @@ const F = () => $('f').elements;
 function toast(t, ms){ const e=$('toast'); e.textContent=t; e.classList.add('on');
   clearTimeout(toast._t); toast._t=setTimeout(()=>e.classList.remove('on'), ms||2500); }
 function band(on){ $('busy').classList.toggle('hidden', !on); }
-function korsat(id){ ['pinScr','listScr','formScr'].forEach(s=>$(s).classList.toggle('hidden', s!==id)); window.scrollTo(0,0); }
+function korsat(id){ ['kirishScr','pinScr','listScr','formScr'].forEach(s=>$(s).classList.toggle('hidden', s!==id)); window.scrollTo(0,0); }
 function num(v){ if(v===''||v==null) return null; const n=Number(String(v).replace(/[^\d.-]/g,'')); return isNaN(n)?null:n; }
 function pul(n){ return n==null ? '—' : Math.round(n).toLocaleString('ru-RU').replace(/,/g,' ') + " so'm"; }
 function bugun(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
-function sanaUz(s){ if(!s) return ''; const p=s.split('-'); return p.length===3 ? p[2]+'.'+p[1]+'.'+p[0] : s; }
-function kunQoldi(s){ if(!s) return null; const a=new Date(s+'T00:00:00'), b=new Date(bugun()+'T00:00:00'); return Math.round((a-b)/864e5); }
-function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function sanaUz(s){ if(!s) return ''; const p=String(s).slice(0,10).split('-'); return p.length===3 ? p[2]+'.'+p[1]+'.'+p[0] : s; }
+function kunQoldi(s){ if(!s) return null; const a=new Date(String(s).slice(0,10)+'T00:00:00'), b=new Date(bugun()+'T00:00:00'); return Math.round((a-b)/864e5); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const ls = {
+  get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e){ return false; } },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} }
+};
 
-async function server(fn, ...args){
+/* ---------- Supabase mijozi (kutubxonasiz) ---------- */
+function sessiyaSaqla(j){ ls.set('sb_sessiya', { access:j.access_token, refresh:j.refresh_token,
+  tugaydi: Date.now() + (Number(j.expires_in)||3600)*1000, email: j.user && j.user.email }); }
+async function sbToken(){
+  const s = ls.get('sb_sessiya');
+  if (!s || !s.refresh) return null;
+  if (s.access && s.tugaydi - 120e3 > Date.now()) return s.access;
+  if (sbToken._p) return sbToken._p;               // bir vaqtda bitta yangilash
+  sbToken._p = (async () => {
+    const r = await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token', { method:'POST',
+      headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ refresh_token: s.refresh }) });
+    if (!r.ok) { if (r.status>=400 && r.status<500) ls.del('sb_sessiya'); return null; }
+    const j = await r.json(); sessiyaSaqla(j); return j.access_token;
+  })().finally(()=>{ sbToken._p = null; });
+  return sbToken._p;
+}
+async function sb(path, { method='GET', body, headers={}, raw } = {}){
+  let t;
+  try { t = await sbToken(); } catch(e){ throw new Error('Internet aloqasi yo\'q'); }
+  if (!t) { kirishKerak(); throw new Error('Qayta kirish kerak'); }
   let r;
   try {
-    r = await fetch(API_URL, { method:'POST', redirect:'follow',
-      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-      body: JSON.stringify({ fn, args }) });
-  } catch(e) { throw new Error('Internet aloqasi yo\'q'); }
-  let j;
-  try { j = await r.json(); } catch(e) { throw new Error('Server javob bermadi ('+r.status+')'); }
-  if (j.error) {
-    if (j.error.includes('SESSIYA_TUGADI')) { qulfla(true); toast('Sessiya tugadi, PIN qayta kiriting'); }
-    throw new Error(j.error);
+    r = await fetch(SB_URL+path, { method, body: raw ? body : (body===undefined ? undefined : JSON.stringify(body)),
+      headers:{ apikey:SB_KEY, Authorization:'Bearer '+t, ...(raw?{}:{'Content-Type':'application/json'}), ...headers } });
+  } catch(e){ throw new Error('Internet aloqasi yo\'q'); }
+  if (r.status===401) { ls.del('sb_sessiya'); kirishKerak(); throw new Error('Qayta kirish kerak'); }
+  if (!r.ok) { const m = await r.text().catch(()=> ''); throw new Error('Server: '+r.status+' '+m.slice(0,120)); }
+  const matn = await r.text();             // bo'sh javob (return=minimal) ham bo'lishi mumkin
+  try { return matn ? JSON.parse(matn) : null; } catch (e) { return null; }
+}
+async function sbHammasi(path){
+  let all = [];
+  for (let off=0; ; off+=1000){
+    const q = await sb(path + (path.includes('?')?'&':'?') + 'limit=1000&offset=' + off);
+    all = all.concat(q); if (q.length < 1000) return all;
   }
-  return j.result;
+}
+const xavfsizNom = s => String(s||'fayl').replace(/[^A-Za-z0-9._-]+/g,'_').slice(-80) || 'fayl';
+async function faylYukla(papka, file){
+  const yol = papka + '/' + Date.now() + '_' + xavfsizNom(file.name);
+  await sb('/storage/v1/object/fayllar/'+yol, { method:'POST', raw:true, body:file,
+    headers:{ 'Content-Type': file.type || 'application/octet-stream', 'x-upsert':'true' } });
+  return yol;
+}
+/* Yopiq fayl: 1 soatlik vaqtinchalik havola bilan ochiladi */
+async function ochFayl(yol){
+  const w = window.open('', '_blank');
+  try {
+    const j = await sb('/storage/v1/object/sign/fayllar/'+yol, { method:'POST', body:{ expiresIn: 3600 } });
+    const url = SB_URL + '/storage/v1' + (j.signedURL || j.signedUrl);
+    if (w) w.location.href = url; else location.href = url;
+  } catch(e){ if (w) w.close(); toast('Fayl ochilmadi: '+e.message, 4000); }
 }
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
 
-/* ---------- PIN ---------- */
+/* ---------- Kirish (bir marta) ---------- */
+function kirishKerak(){ OCHIQ=false; korsat('kirishScr'); }
+async function emailKirish(){
+  const email = $('kEmail').value.trim(), parol = $('kParol').value;
+  $('kirishXabar').textContent = ''; band(true);
+  try {
+    const r = await fetch(SB_URL+'/auth/v1/token?grant_type=password', { method:'POST',
+      headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ email, password: parol }) });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(j.error_description || j.msg || 'Email yoki parol noto\'g\'ri');
+    sessiyaSaqla(j); $('kParol').value='';
+    pinBosqich(ls.get('pin_hash') ? 'kirish' : 'yangi');
+  } catch(e){ $('kirishXabar').textContent = e.message === 'Failed to fetch' ? 'Internet aloqasi yo\'q' : e.message; }
+  band(false);
+}
+function chiqish(){
+  if (!confirm('Akkauntdan chiqasizmi? Keyingi safar email va parol so\'raladi.')) return;
+  const s = ls.get('sb_sessiya');
+  if (s && s.access) fetch(SB_URL+'/auth/v1/logout', { method:'POST', headers:{ apikey:SB_KEY, Authorization:'Bearer '+s.access } }).catch(()=>{});
+  ['sb_sessiya','pin_hash','kesh_v2','pin_xato'].forEach(ls.del);
+  DATA=[]; EDO=[]; OCHIQ=false; korsat('kirishScr');
+}
+
+/* ---------- PIN (telefonning o'zida tekshiriladi) ---------- */
+async function xesh(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('alizamon:'+s));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
 function pinChiz(){ $('dots').innerHTML = Array.from({length:PIN_LEN},(_,i)=>`<span class="${i<pin.length?'f':''}"></span>`).join(''); }
 (function(){ const k=['1','2','3','4','5','6','7','8','9','','0','⌫'];
   $('pad').innerHTML = k.map(x=> x===''?'<span></span>':`<button class="${x==='⌫'?'t':''}" data-k="${x}">${x}</button>`).join('');
   $('pad').onclick = e => { const k=e.target.dataset && e.target.dataset.k; if(!k) return;
     if (k==='⌫') pin=pin.slice(0,-1); else if (pin.length<PIN_LEN) pin+=k;
-    pinChiz(); if (pin.length===PIN_LEN) kirish(); };
+    pinChiz(); if (pin.length===PIN_LEN) pinTayyor(); };
   pinChiz();
 })();
-
-async function kirish(){
-  band(true);
-  try {
-    const r = await server('login', pin);
-    if (r.ok) { TOKEN=r.token; $('pinMsg').textContent=''; pin=''; pinChiz(); korsat('listScr'); yangila(); faollik(); }
-    else { $('pinMsg').textContent=r.xabar; pin=''; pinChiz(); if(navigator.vibrate) navigator.vibrate(200); }
-  } catch(e){ $('pinMsg').textContent='Ulanishda xato: '+(e.message||e); pin=''; pinChiz(); }
-  band(false);
+let PIN_REJIM = 'kirish';
+function pinBosqich(r){
+  PIN_REJIM = r; pin=''; pinYangi=null; pinChiz(); $('pinMsg').textContent='';
+  $('pinSarlavha').textContent = r==='yangi' ? 'Yangi PIN-kod o\'ylab toping (4 raqam)' : 'PIN-kodni kiriting';
+  korsat('pinScr');
 }
-function qulfla(jim){ if(TOKEN && !jim) server('logout', TOKEN).catch(()=>{}); TOKEN=null; DATA=[]; EDO=[]; $('list').innerHTML=''; $('edoList').innerHTML=''; korsat('pinScr'); }
+async function pinTayyor(){
+  const p = pin; pin=''; setTimeout(pinChiz, 150);
+  if (PIN_REJIM==='yangi') {
+    if (!pinYangi) { pinYangi = p; $('pinSarlavha').textContent='PIN-kodni yana bir marta kiriting'; return; }
+    if (pinYangi !== p) { pinYangi=null; $('pinSarlavha').textContent='Yangi PIN-kod o\'ylab toping (4 raqam)';
+      $('pinMsg').textContent='Ikki PIN bir xil emas, qaytadan'; return; }
+    ls.set('pin_hash', await xesh(p)); return ochildi();
+  }
+  const x = ls.get('pin_xato') || { soni:0, gacha:0 };
+  if (x.gacha > Date.now()) { $('pinMsg').textContent = 'Juda ko\'p noto\'g\'ri urinish. '+Math.ceil((x.gacha-Date.now())/60000)+' daqiqadan keyin urining.'; return; }
+  if (await xesh(p) === ls.get('pin_hash')) { ls.del('pin_xato'); return ochildi(); }
+  x.soni++; if (x.soni >= MAX_URINISH) { x.gacha = Date.now()+BLOK_DAQ*60000; x.soni=0; }
+  ls.set('pin_xato', x);
+  $('pinMsg').textContent = x.gacha > Date.now() ? 'Bloklandi: '+BLOK_DAQ+' daqiqa kuting' : 'PIN noto\'g\'ri. Qolgan urinishlar: '+(MAX_URINISH-x.soni);
+  if (navigator.vibrate) navigator.vibrate(200);
+}
+function ochildi(){
+  OCHIQ = true; $('pinMsg').textContent='';
+  keshdanOl(); korsat('listScr'); chiz(); edoChiz(); faollik();
+  yangila();
+}
+function qulfla(){ OCHIQ=false; DATA=[]; EDO=[]; $('list').innerHTML=''; $('edoList').innerHTML=''; pinBosqich('kirish'); }
 
-let _qt; function faollik(){ clearTimeout(_qt); if(TOKEN) _qt=setTimeout(()=>{ qulfla(); toast('Avtomatik qulflandi'); }, AUTO_QULF_DAQ*60000); }
+let _qt; function faollik(){ clearTimeout(_qt); if(OCHIQ) _qt=setTimeout(()=>{ qulfla(); toast('Avtomatik qulflandi'); }, AUTO_QULF_DAQ*60000); }
 ['click','keydown','touchstart','input'].forEach(ev=>document.addEventListener(ev, faollik, {passive:true}));
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden) window._yashirin=Date.now();
-  else if(TOKEN && window._yashirin && Date.now()-window._yashirin > AUTO_QULF_DAQ*60000) qulfla(); });
+  else if(OCHIQ && window._yashirin && Date.now()-window._yashirin > AUTO_QULF_DAQ*60000) qulfla();
+  else if(OCHIQ && window._yashirin && Date.now()-window._yashirin > 60000) yangila(true); });
 
-/* ---------- Ro'yxat ---------- */
-async function yangila(){
-  band(true);
-  const edo = server('edoRoyxat', TOKEN).then(d=>{ EDO = d || []; edoChiz(); }).catch(()=>{});  // EDO bo'lmasa ham ishlar ochilaveradi
-  try { DATA = await server('royxat', TOKEN); chiz(); } catch(e){ if(TOKEN) toast('Yuklab bo\'lmadi: '+(e.message||e)); }
-  await edo;
-  band(false);
+/* ---------- Telefondagi nusxa (kesh) + faqat o'zgarganlarini yuklash ---------- */
+let KESH = { ishlar:[], edo:[], ishVaqt:null, edoVaqt:null, vaqt:0 };
+function ishUi(d){
+  return { row:d.id, n:d.n, obyekt:d.obyekt||'', buyurtmachi:d.buyurtmachi||'', telefon:d.telefon||'', ariza:d.ariza||'',
+    kelgan:d.kelgan||'', muddat:d.muddat||'', xulosa:d.xulosa||'', shartnoma:d.shartnoma||'', shSana:d.sh_sana||'',
+    summa:d.summa==null?'':d.summa, tushgan:d.tushgan==null?'':d.tushgan, qoldiq:'', hajm:d.hajm||'',
+    lat:d.lat||'', lng:d.lng||'', izoh:d.izoh||'', tekshirildi:d.tekshirildi||'',
+    fayl: d.fayl_path ? { path:d.fayl_path, nom:d.fayl_nom||'Xulosa' } : d.fayl_url ? { url:d.fayl_url, nom:d.fayl_nom||'Xulosa' } : null };
 }
+function keshdanOl(){
+  const k = ls.get('kesh_v2');
+  if (k && Array.isArray(k.ishlar)) KESH = k;
+  DATA = KESH.ishlar.map(ishUi).sort((a,b)=>(a.n||0)-(b.n||0)||a.row-b.row);
+  EDO = KESH.edo.slice();
+}
+function birlashtir(eski, yangi){
+  if (!yangi.length) return eski;
+  const m = new Map(eski.map(x=>[x.id,x])); yangi.forEach(x=>m.set(x.id,x)); return [...m.values()];
+}
+const engKechi = (a, v) => a.reduce((m,x)=> x.updated_at > (m||'') ? x.updated_at : m, v);
+function keshgaYoz(){ KESH.vaqt = Date.now(); if (!ls.set('kesh_v2', KESH)) { /* joy tugasa — mazmun bilan emas, faqat ro'yxat */ } }
 
-/* ---------- EDO: topshiriq va murojaatlar ---------- */
-let EDO = [], EFILTR = 'faol', REJIM = 'ish';
-function rejim(r){
-  REJIM = r;
-  $('segIsh').classList.toggle('on', r==='ish'); $('segEdo').classList.toggle('on', r==='edo');
-  $('ishView').classList.toggle('hidden', r!=='ish'); $('edoView').classList.toggle('hidden', r!=='edo');
-  $('fab').classList.toggle('hidden', r!=='ish');
-  window.scrollTo(0,0);
-}
-function edoHolat(r){
-  const faol = !/^Bajarilgan/.test(r.holat||'');
-  const k = kunQoldi(r.muddat);
-  return { faol, k, kechikkan: faol && k!=null && k<0 };
-}
-function edoMuddat(r, h){
-  if (!r.muddat) return h.faol ? { cls:'m-yashil', chap:'Muddatsiz', ong:r.holat } : null;
-  const sana = sanaUz(r.muddat), k = h.k;
-  if (!h.faol) return { cls:'m-tugadi', chap:'✓ Muddat: '+sana, ong:'Bajarilgan' };
-  if (k < 0)   return { cls:'m-qizil', chap:'🔴 Muddat o\'tdi: '+sana, ong:(-k)+' kun kechikdi' };
-  if (k === 0) return { cls:'m-bugun', chap:'🟠 Muddat BUGUN: '+sana, ong:'Bugun javob berish kerak' };
-  if (k <= 3)  return { cls:'m-sariq', chap:'🟡 Muddat: '+sana, ong:k+' kun qoldi' };
-  return { cls:'m-yashil', chap:'🟢 Muddat: '+sana, ong:k+' kun qoldi' };
-}
-const EFILTRLAR = [['faol','Bajarilmagan'],['kechikkan','Muddati o\'tgan'],['Topshiriq','Topshiriqlar'],['Murojaat','Murojaatlar'],['bajarilgan','Bajarilgan'],['hammasi','Hammasi']];
-function edoChiz(){
-  let faol=0, kech=0, bugunS=0;
-  EDO.forEach(r=>{ const h=edoHolat(r); if(h.faol){ faol++; if(h.kechikkan) kech++; if(h.k===0) bugunS++; } });
-  $('edoSon').textContent = faol || '';
-  $('edoSon').className = faol ? 'son'+(kech?' qizil':'') : '';
-  $('edoStats').innerHTML = `<div class="stat"><b>${faol}</b><small>Bajarilmagan</small></div>
-    <div class="stat"><b style="${kech?'color:var(--bad)':''}">${kech}</b><small>Muddati o'tgan</small></div>
-    <div class="stat"><b>${EDO.filter(r=>r.tur==='Murojaat'&&edoHolat(r).faol).length}</b><small>Murojaatlar</small></div>`;
-  let og='';
-  if (bugunS) og += `<div class="ogoh bugun" onclick="EFILTR='faol';edoChiz()">🔔 Bugun muddati tugaydi: ${bugunS} ta hujjat</div>`;
-  if (kech) og += `<div class="ogoh otgan" onclick="EFILTR='kechikkan';edoChiz()">⚠ Muddati o'tgan: ${kech} ta hujjat<small>Ko'rish ›</small></div>`;
-  $('edoOgoh').innerHTML = og;
-  $('edoFilters').innerHTML = EFILTRLAR.map(([k,t])=>`<button class="${EFILTR===k?'on':''}" onclick="EFILTR='${k}';edoChiz()">${t}</button>`).join('');
-
-  const q = $('eq').value.trim().toLowerCase();
-  const rows = EDO.filter(r=>{
-    const h = edoHolat(r);
-    if (EFILTR==='faol' && !h.faol) return false;
-    if (EFILTR==='kechikkan' && !h.kechikkan) return false;
-    if (EFILTR==='bajarilgan' && h.faol) return false;
-    if ((EFILTR==='Topshiriq'||EFILTR==='Murojaat') && r.tur!==EFILTR) return false;
-    if (!q) return true;
-    return [r.reg,r.kimdan,r.mazmun,r.rez,r.ijrochilar].join(' ').toLowerCase().includes(q);
-  });
-  // Bajarilmaganlar: muddati yaqinroq birinchi; qolganlari: yangi kelgani birinchi
-  if (EFILTR==='faol'||EFILTR==='kechikkan') rows.sort((a,b)=>(a.muddat||'9999').localeCompare(b.muddat||'9999'));
-
-  $('edoVaqt').textContent = EDO.length ? 'EDO dan avtomatik olinadi (kompyuterdagi Chrome kengaytmasi orqali)' : '';
-  if (!rows.length) { $('edoList').innerHTML = `<div class="empty">${EDO.length?'Hech narsa topilmadi':'EDO hujjatlari hali kelmagan.<br>Kompyuterda Chrome kengaytmasi o\'rnatilganini tekshiring.'}</div>`; return; }
-
-  $('edoList').innerHTML = rows.map(r=>{
-    const h = edoHolat(r), m = edoMuddat(r, h);
-    const ikon = r.tur==='Murojaat' ? '📨' : '📌';
-    // edo'da aynan shu hujjatni ochadi (rid/doc bo'lmasa — umumiy ro'yxatni)
-    const edoUrl = 'https://edo.ijro.uz/workflow/inbox/' + (r.tur==='Murojaat' ? 'for-appeal' : 'for-execution') + '/' +
-      (r.rid && r.doc ? encodeURIComponent(r.rid) + '/' + encodeURIComponent(r.doc) : 'search');
-    const tags = [`<span class="tag">${ikon} ${esc(r.tur)}</span>`];
-    if (r.ijrochilar) tags.push(`<span class="tag">👤 ${esc(r.ijrochilar)}</span>`);
-    if (r.ishRow) tags.push(`<span class="tag ok">✓ Ishlarga qo'shilgan</span>`);
-    return `<div class="item ${m?m.cls:''}">
-      <div class="top"><span class="no">${ikon}</span><span class="ttl">${esc(r.reg)} — ${esc(r.kimdan||'—')}</span></div>
-      <div class="sub">Hujjat sanasi: ${sanaUz(r.sana)||'—'}</div>
-      ${r.mazmun?`<div class="edo-mazmun">${esc(r.mazmun)}</div>`:''}
-      ${r.rez?`<div class="edo-rez">✍ ${esc(r.rez)}</div>`:''}
-      ${m?`<div class="mud ${m.cls}"><span>${m.chap}</span><small>${esc(m.ong)}</small></div>`:''}
-      <div class="tags">${tags.join('')}</div>
-      <div class="acts">
-        ${r.fayl&&r.fayl.url?`<a href="${esc(r.fayl.url)}" target="_blank">📄 Hujjat</a>`:''}
-        <a href="${edoUrl}" target="_blank">🔗 EDO</a>
-        ${r.ishRow?`<button onclick="ochForm(${Number(r.ishRow)})">✎ Ishni ochish</button>`
-                  :`<button class="asosiy" onclick="edoIshga('${esc(r.id)}')">＋ Ishga qo'shish</button>`}
-      </div></div>`;
-  }).join('');
-}
-async function edoIshga(id){
-  band(true);
+async function yangila(jim){
+  if (!OCHIQ || yangila._ish) return;
+  yangila._ish = true;
+  const birinchi = !KESH.vaqt;
+  if (birinchi) band(true); else $('yBtn').classList.add('aylan');
   try {
-    const res = await server('edoIshgaQosh', TOKEN, id);
-    toast(res.oldin ? 'Bu hujjat avval qo\'shilgan' : '✓ Ishlar ro\'yxatiga qo\'shildi');
-    await yangila();
-    rejim('ish');
-    if (DATA.find(x=>x.row===res.row)) ochForm(res.row);   // telefon, lokatsiya va boshqalarni to'ldirish uchun
-  } catch(e){ toast('Qo\'shilmadi: '+(e.message||e), 4000); }
-  band(false);
-}
+    // 5 daqiqa ustma-ust olamiz — bir vaqtda yozilgan o'zgarishlar tushib qolmasin
+    const oldin = v => new Date(new Date(v).getTime() - 300000).toISOString();
+    const iq = KESH.ishVaqt ? '&updated_at=gt.'+encodeURIComponent(oldin(KESH.ishVaqt)) : '';
+    const eq = KESH.edoVaqt ? '&updated_at=gt.'+encodeURIComponent(oldin(KESH.edoVaqt)) : '';
+    const [ish, edo] = await Promise.all([
+      sbHammasi('/rest/v1/ishlar?select=*&order=updated_at.asc'+iq),
+      sbHammasi('/rest/v1/edo?select=id,bolim,reg,sana,kimdan,mazmun,rez,muddat,holat,oqilgan,ijrochilar,doc_id,recipient_id,kelgan,fayl_path,fayl_nom,ish_id,updated_at&order=updated_at.asc'+eq)
+    ]);
+    KESH.ishlar = birlashtir(KESH.ishlar, ish); KESH.ishVaqt = engKechi(ish, KESH.ishVaqt);
+    KESH.edo = birlashtir(KESH.edo, edo);     KESH.edoVaqt = engKechi(edo, KESH.edoVaqt);
+    keshgaYoz(); keshdanOl();
+    $('oflayn').innerHTML = '';
+    if (OCHIQ) { chiz(); edoChiz(); }
 
+  } catch(e){
+    if (OCHIQ) $('oflayn').innerHTML = `<div class="oflayn">⚠ ${esc(e.message)} — telefondagi nusxa ko'rsatilmoqda${KESH.vaqt?' ('+new Date(KESH.vaqt).toLocaleString('ru-RU')+')':''}</div>`;
+  }
+  band(false); $('yBtn').classList.remove('aylan'); yangila._ish = false;
+}
+function ishniKeshga(d){ KESH.ishlar = birlashtir(KESH.ishlar,[d]); KESH.ishVaqt = engKechi([d], KESH.ishVaqt); keshgaYoz(); keshdanOl(); }
+function edoniKeshga(d){ KESH.edo = birlashtir(KESH.edo,[d]); KESH.edoVaqt = engKechi([d], KESH.edoVaqt); keshgaYoz(); keshdanOl(); }
+
+/* ---------- Ishlar ro'yxati ---------- */
 function holat(r){
   const q = num(r.qoldiq!=='' && r.qoldiq!=null ? r.qoldiq : (num(r.summa)!=null ? num(r.summa)-(num(r.tushgan)||0) : null));
   const k = kunQoldi(r.muddat);
   const tugagan = !!String(r.xulosa||'').trim();
-  const tek = !tugagan && !!r.tekshirildi;          // tekshirilgan, xulosa kutilmoqda
-  const kuzat = !tugagan && !tek;                  // muddat nazoratidagi ishlar
+  const tek = !tugagan && !!r.tekshirildi;
+  const kuzat = !tugagan && !tek;
   return { q, k, tugagan, tek, qarz: q!=null && q>0, kechikkan: kuzat && k!=null && k<0, yaqin: kuzat && k!=null && k>=0 && k<=3 };
 }
-
-/* Bajarish muddati: yashil — vaqt bor, sariq — 1–3 kun qoldi, to'q sariq — bugun, qizil — o'tib ketgan */
 function muddatHolat(r, h){
   if (!r.muddat && !h.tek) return null;
   const sana = sanaUz(r.muddat), k = h.k;
@@ -472,7 +547,10 @@ function muddatHolat(r, h){
   if (k <= 3)  return { cls:'m-sariq',  chap:'🟡 Muddat: '+sana, ong:k+' kun qoldi' };
   return { cls:'m-yashil', chap:'🟢 Muddat: '+sana, ong:k+' kun qoldi' };
 }
-
+function faylTugma(f, matn){
+  if (!f) return '';
+  return f.path ? `<button onclick="ochFayl('${esc(f.path)}')">${matn}</button>` : `<a href="${esc(f.url)}" target="_blank">${matn}</a>`;
+}
 const FILTRLAR = [['hammasi','Hammasi'],['bugun','Bugun muddat'],['jarayonda','Jarayonda'],['kechikkan','Muddati o\'tgan'],['tek','Xulosa kutilmoqda'],['qarz','Qoldiq bor'],['tugagan','Xulosa berilgan']];
 function chiz(){
   const q = $('q').value.trim().toLowerCase();
@@ -517,11 +595,117 @@ function chiz(){
       <div class="tags">${tags.join('')}</div>
       <div class="acts">
         ${tel?`<a href="tel:${tel}">📞 Qo'ng'iroq</a>`:''}
-        ${r.lat&&r.lng?`<a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target="_blank">🗺 Xarita</a>`:''}
-        ${r.fayl&&r.fayl.url?`<a href="${esc(r.fayl.url)}" target="_blank">📄 Xulosa</a>`:''}
+        ${r.lat&&r.lng?`<a href="https://www.google.com/maps?q=${encodeURIComponent(r.lat)},${encodeURIComponent(r.lng)}" target="_blank">🗺 Xarita</a>`:''}
+        ${faylTugma(r.fayl,'📄 Xulosa')}
         <button onclick="ochForm(${r.row})">✎ Tahrirlash</button>
       </div></div>`;
   }).join('');
+}
+
+/* ---------- EDO: Ijro uchun / Murojaatlar / Ma'lumot uchun ---------- */
+let EBOLIM = 'ijro', EFILTR = 'faol', REJIM = 'ish';
+const EBET = 60; let EKOR = EBET;
+const BOLIMLAR = [['ijro','📌','Ijro uchun','for-execution'],['murojaat','📨','Murojaatlar','for-appeal'],['malumot','ℹ️','Ma\'lumot uchun','for-information']];
+function rejim(r){
+  REJIM = r;
+  $('segIsh').classList.toggle('on', r==='ish'); $('segEdo').classList.toggle('on', r==='edo');
+  $('ishView').classList.toggle('hidden', r!=='ish'); $('edoView').classList.toggle('hidden', r!=='edo');
+  $('fab').classList.toggle('hidden', r!=='ish');
+  window.scrollTo(0,0);
+}
+function eBolimTanla(b){ EBOLIM=b; EFILTR = 'faol'; EKOR=EBET; edoChiz(); window.scrollTo(0,0); }
+function edoHolat(r){
+  const faol = Number(r.holat) < 20;
+  const k = r.bolim==='malumot' ? null : kunQoldi(r.muddat);
+  return { faol, k, kechikkan: faol && k!=null && k<0 };
+}
+function edoMuddat(r, h){
+  if (r.bolim==='malumot') return h.faol ? { cls:'m-sariq', chap:'👁 Ko\'rilmagan', ong:'' } : null;
+  if (!r.muddat) return h.faol ? { cls:'m-yashil', chap:'Muddatsiz', ong:'Bajarilmoqda' } : { cls:'m-tugadi', chap:'✓ Bajarilgan', ong:'' };
+  const sana = sanaUz(r.muddat), k = h.k;
+  if (!h.faol) return { cls:'m-tugadi', chap:'✓ Muddat: '+sana, ong:'Bajarilgan' };
+  if (k < 0)   return { cls:'m-qizil', chap:'🔴 Muddat o\'tdi: '+sana, ong:(-k)+' kun kechikdi' };
+  if (k === 0) return { cls:'m-bugun', chap:'🟠 Muddat BUGUN: '+sana, ong:'Bugun javob berish kerak' };
+  if (k <= 3)  return { cls:'m-sariq', chap:'🟡 Muddat: '+sana, ong:k+' kun qoldi' };
+  return { cls:'m-yashil', chap:'🟢 Muddat: '+sana, ong:k+' kun qoldi' };
+}
+function edoFiltrlar(){
+  return EBOLIM==='malumot' ? [['faol','Ko\'rilmagan'],['hammasi','Hammasi']]
+    : [['faol','Bajarilmagan'],['kechikkan','Muddati o\'tgan'],['bajarilgan','Bajarilgan'],['hammasi','Hammasi']];
+}
+function edoChiz(){
+  const son = {}, kech = {};
+  BOLIMLAR.forEach(([b])=>{ son[b]=0; kech[b]=0; });
+  EDO.forEach(r=>{ const h=edoHolat(r); if (h.faol && son[r.bolim]!=null){ son[r.bolim]++; if(h.kechikkan) kech[r.bolim]++; } });
+  const asosiy = son.ijro + son.murojaat, kechJami = kech.ijro + kech.murojaat;
+  $('edoSon').textContent = asosiy || '';
+  $('edoSon').className = asosiy ? 'son'+(kechJami?' qizil':'') : '';
+  $('eBolim').innerHTML = BOLIMLAR.map(([b,ik,nom])=>`<button class="${EBOLIM===b?'on':''}" onclick="eBolimTanla('${b}')">
+      <b>${son[b]}${kech[b]?` <span class="qiz">· ${kech[b]}⚠</span>`:''}</b>${ik} ${nom}</button>`).join('');
+
+  const mana = EDO.filter(r=>r.bolim===EBOLIM);
+  const bugunS = mana.filter(r=>{ const h=edoHolat(r); return h.faol && h.k===0; }).length;
+  let og='';
+  if (bugunS) og += `<div class="ogoh bugun" onclick="EFILTR='faol';edoChiz()">🔔 Bugun muddati tugaydi: ${bugunS} ta</div>`;
+  if (kech[EBOLIM]) og += `<div class="ogoh otgan" onclick="EFILTR='kechikkan';edoChiz()">⚠ Muddati o'tgan: ${kech[EBOLIM]} ta<small>Ko'rish ›</small></div>`;
+  $('edoOgoh').innerHTML = og;
+  $('edoFilters').innerHTML = edoFiltrlar().map(([k,t])=>`<button class="${EFILTR===k?'on':''}" onclick="EFILTR='${k}';EKOR=EBET;edoChiz()">${t}</button>`).join('');
+
+  const q = $('eq').value.trim().toLowerCase();
+  const rows = mana.filter(r=>{
+    const h = edoHolat(r);
+    if (EFILTR==='faol' && !h.faol) return false;
+    if (EFILTR==='kechikkan' && !h.kechikkan) return false;
+    if (EFILTR==='bajarilgan' && h.faol) return false;
+    if (!q) return true;
+    return [r.reg,r.kimdan,r.mazmun,r.rez,r.ijrochilar].join(' ').toLowerCase().includes(q);
+  });
+  if (EFILTR==='faol'||EFILTR==='kechikkan') rows.sort((a,b)=>(a.muddat||'9999').localeCompare(b.muddat||'9999') || String(b.kelgan||'').localeCompare(String(a.kelgan||'')));
+  else rows.sort((a,b)=>String(b.kelgan||'').localeCompare(String(a.kelgan||'')));
+
+  if (!rows.length) { $('edoList').innerHTML = `<div class="empty">${EDO.length?'Bu yerda hujjat yo\'q':'EDO hujjatlari hali kelmagan.<br>Kompyuterdagi Chrome kengaytmasi ishlayotganini tekshiring.'}</div>`; return; }
+
+  const yol = Object.fromEntries(BOLIMLAR.map(b=>[b[0], b[3]]));
+  const ikon = Object.fromEntries(BOLIMLAR.map(b=>[b[0], b[1]]));
+  $('edoList').innerHTML = rows.slice(0, EKOR).map(r=>{
+    const h = edoHolat(r), m = edoMuddat(r, h);
+    const edoUrl = 'https://edo.ijro.uz/workflow/inbox/' + yol[r.bolim] + '/' +
+      (r.recipient_id && r.doc_id ? encodeURIComponent(r.recipient_id)+'/'+encodeURIComponent(r.doc_id) : 'search');
+    const tags = [];
+    if (r.ijrochilar) tags.push(`<span class="tag">👤 ${esc(r.ijrochilar)}</span>`);
+    if (r.ish_id) tags.push(`<span class="tag ok">✓ Ishlarga qo'shilgan</span>`);
+    return `<div class="item ${m?m.cls:''}">
+      <div class="top"><span class="no">${ikon[r.bolim]||''}</span><span class="ttl">${esc(r.reg)} — ${esc(r.kimdan||'—')}</span></div>
+      <div class="sub">Hujjat sanasi: ${sanaUz(r.sana)||'—'}${r.kelgan?' · keldi '+sanaUz(String(r.kelgan).slice(0,10)):''}</div>
+      ${r.mazmun?`<div class="edo-mazmun">${esc(r.mazmun)}</div>`:''}
+      ${r.rez?`<div class="edo-rez">✍ ${esc(r.rez)}</div>`:''}
+      ${m?`<div class="mud ${m.cls}"><span>${m.chap}</span><small>${esc(m.ong)}</small></div>`:''}
+      ${tags.length?`<div class="tags">${tags.join('')}</div>`:''}
+      <div class="acts">
+        ${faylTugma(r.fayl_path ? { path:r.fayl_path } : null, '📄 Hujjat')}
+        <a href="${edoUrl}" target="_blank">🔗 EDO</a>
+        ${r.bolim==='malumot' ? '' : r.ish_id ? `<button onclick="ochForm(${Number(r.ish_id)})">✎ Ishni ochish</button>`
+                  : `<button class="asosiy" onclick="edoIshga('${esc(r.id)}')">＋ Ishga qo'shish</button>`}
+      </div></div>`;
+  }).join('') + (rows.length > EKOR ? `<button class="yana" onclick="EKOR+=EBET;edoChiz()">Yana ko'rsatish (${rows.length-EKOR} ta qoldi)</button>` : '');
+}
+async function edoIshga(id){
+  const e = EDO.find(x=>x.id===id); if (!e) return;
+  band(true);
+  try {
+    const [d] = await sb('/rest/v1/ishlar', { method:'POST', headers:{ Prefer:'return=representation' }, body:{
+      obyekt: String(e.mazmun || (e.reg + ' — ' + (e.kimdan||''))).trim(),
+      buyurtmachi: e.kimdan || null, ariza: e.reg || null,
+      kelgan: e.sana || (e.kelgan ? String(e.kelgan).slice(0,10) : null), muddat: e.muddat || null,
+      izoh: 'EDO ' + (e.bolim==='murojaat'?'murojaat':'topshiriq') + ' ' + e.reg + (e.rez ? ': ' + e.rez : '')
+    } });
+    ishniKeshga(d);
+    const [u] = await sb('/rest/v1/edo?id=eq.'+encodeURIComponent(id), { method:'PATCH', headers:{ Prefer:'return=representation' }, body:{ ish_id: d.id } });
+    if (u) edoniKeshga(u);
+    toast('✓ Ishlar ro\'yxatiga qo\'shildi');
+    rejim('ish'); chiz(); edoChiz(); ochForm(d.id);
+  } catch(err){ toast('Qo\'shilmadi: '+(err.message||err), 4000); }
+  band(false);
 }
 
 /* ---------- Forma ---------- */
@@ -540,8 +724,8 @@ function ochForm(row){
     e.row.value = ''; e.kelgan.value = bugun(); e.shSana.value = '';
     joylashuv(false);
   }
-  $('faylJoriy').innerHTML = r && r.fayl && r.fayl.url
-    ? `📄 <a href="${esc(r.fayl.url)}" target="_blank">${esc(r.fayl.nom||'Xulosa')}</a>`
+  $('faylJoriy').innerHTML = r && r.fayl
+    ? '📄 ' + (r.fayl.path ? `<a href="#" onclick="ochFayl('${esc(r.fayl.path)}');return false">${esc(r.fayl.nom)}</a>` : `<a href="${esc(r.fayl.url)}" target="_blank">${esc(r.fayl.nom)}</a>`)
     : 'Fayl yuklanmagan';
   qoldiqHisob();
   korsat('formScr');
@@ -559,7 +743,6 @@ function qoldiqHisob(){
   if (s==null){ el.textContent='—'; el.style.color=''; return; }
   const q=s-t; el.textContent=pul(q); el.style.color = q>0?'var(--warn)':'var(--ok)';
 }
-
 function geoMatn(p, sarlavha){
   $('geoInfo').innerHTML = p
     ? `<b>${sarlavha||'Aniqlandi'}${p.acc?` (±${Math.round(p.acc)} m)`:''}</b>${(+p.lat).toFixed(6)}, ${(+p.lng).toFixed(6)}`
@@ -580,38 +763,44 @@ function joylashuv(qolda){
   }, { enableHighAccuracy:true, timeout:20000, maximumAge:0 });
 }
 
+const sanaN = v => v ? v : null;
 async function saqla(){
   const e=F();
   if (!e.obyekt.value.trim()){ toast('Obyekt manzili va nomini kiriting'); e.obyekt.focus(); return; }
-  const rec = {};
-  ['row','obyekt','hajm','lat','lng','buyurtmachi','telefon','ariza','xulosa','kelgan','muddat','shartnoma','shSana','izoh']
-    .forEach(k=> rec[k]=e[k].value.trim());
-  rec.tekshirildi = e.tekshirildi.value || '';
-  rec.summa = e.summa.value.replace(/[^\d]/g,'');
-  rec.tushgan = e.tushgan.value.replace(/[^\d]/g,'');
+  const v = k => e[k].value.trim();
+  const rec = {
+    obyekt: v('obyekt'), hajm: v('hajm')||null, lat: v('lat')||null, lng: v('lng')||null,
+    buyurtmachi: v('buyurtmachi')||null, telefon: v('telefon')||null, ariza: v('ariza')||null, xulosa: v('xulosa')||null,
+    kelgan: sanaN(v('kelgan')), muddat: sanaN(v('muddat')), shartnoma: v('shartnoma')||null, sh_sana: sanaN(v('shSana')),
+    izoh: v('izoh')||null, tekshirildi: sanaN(e.tekshirildi.value),
+    summa: num(e.summa.value.replace(/[^\d]/g,'')), tushgan: num(e.tushgan.value.replace(/[^\d]/g,''))
+  };
+  const row = Number(v('row')) || 0;
   const fayl = e.fayl.files && e.fayl.files[0];
   band(true);
   try {
-    const res = await server('saqla', TOKEN, rec);
+    let [d] = row
+      ? await sb('/rest/v1/ishlar?id=eq.'+row, { method:'PATCH', headers:{ Prefer:'return=representation' }, body:rec })
+      : await sb('/rest/v1/ishlar', { method:'POST', headers:{ Prefer:'return=representation' }, body:rec });
     if (fayl) {
       toast('Xulosa yuklanmoqda…', 60000);
-      const b64 = await base64(fayl);
-      await server('xulosaYukla', TOKEN, res.row, fayl.name, fayl.type || '', b64);
+      const yol = await faylYukla('xulosa/'+d.id, fayl);
+      [d] = await sb('/rest/v1/ishlar?id=eq.'+d.id, { method:'PATCH', headers:{ Prefer:'return=representation' },
+        body:{ fayl_path: yol, fayl_nom: fayl.name, fayl_url: null } });
       toast('✓ Saqlandi, xulosa joylandi');
-    } else toast('✓ Jadvalga saqlandi');
-    korsat('listScr'); await yangila();
-  } catch(err){ if(TOKEN) toast('Saqlanmadi: '+(err.message||err), 5000); }
+    } else toast('✓ Saqlandi');
+    ishniKeshga(d); korsat('listScr'); chiz();
+  } catch(err){ toast('Saqlanmadi: '+(err.message||err), 5000); }
   band(false);
 }
 
 /* ---------- Binoga borib tekshirildi ---------- */
 function tekCheck(ch){ const e=F(); e.tekshirildi.value = ch.checked ? (e.tekshirildi.value || bugun()) : ''; }
 async function tekBelgila(row){
-  const r = DATA.find(x=>x.row===row); if (!r) return;
   band(true);
   try {
-    await server('tekshirildi', TOKEN, row, bugun());
-    r.tekshirildi = bugun(); chiz();
+    const [d] = await sb('/rest/v1/ishlar?id=eq.'+row, { method:'PATCH', headers:{ Prefer:'return=representation' }, body:{ tekshirildi: bugun() } });
+    ishniKeshga(d); chiz();
     toast('🔍 Tekshirildi deb belgilandi — muddat eslatmasi endi kelmaydi', 3500);
   } catch(e){ toast('Saqlanmadi: '+(e.message||e), 4000); }
   band(false);
@@ -623,11 +812,11 @@ function faylTanlandi(el){
   if (f.size > MAX_MB*1024*1024) { toast(`Fayl juda katta (${MAX_MB} MB dan oshmasin)`, 4000); el.value=''; return; }
   $('faylJoriy').innerHTML = `📎 ${esc(f.name)} <small>(${(f.size/1024/1024).toFixed(1)} MB) — “Saqlash” bosilganda yuklanadi</small>`;
 }
-function base64(file){
-  return new Promise((res, rej)=>{ const r = new FileReader();
-    r.onload = () => res(String(r.result).split(',')[1]); r.onerror = () => rej(new Error('Faylni o\'qib bo\'lmadi'));
-    r.readAsDataURL(file); });
-}
+
+/* ---------- Boshlanish ---------- */
+if (!ls.get('sb_sessiya')) korsat('kirishScr');
+else if (!ls.get('pin_hash')) pinBosqich('yangi');
+else pinBosqich('kirish');
 </script>
 </body>
 </html>
