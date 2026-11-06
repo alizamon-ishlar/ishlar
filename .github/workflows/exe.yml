@@ -1,0 +1,35 @@
+name: Windows dasturi (.exe)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['desktop/**', '.github/workflows/exe.yml']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Versiya
+        id: v
+        shell: bash
+        run: echo "ver=$(node -p "require('./desktop/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Yig'ish
+        working-directory: desktop
+        shell: bash
+        run: |
+          npm install --no-audit --no-fund
+          npx electron-builder --win nsis portable --publish never
+      - name: Releases ga joylash
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.ver }}
+          name: Alizamon ishlar ${{ steps.v.outputs.ver }}
+          make_latest: true
+          files: |
+            desktop/dist/Alizamon-ishlar-Setup.exe
+            desktop/dist/Alizamon-ishlar-Portable.exe
