@@ -134,6 +134,17 @@
   .btnCancel{background:var(--chip);color:var(--ink);flex:.5!important}
   .req{color:var(--bad)}
 
+  /* Ishlar | EDO almashtirgich */
+  .seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--chip);border-radius:12px;padding:4px;margin-bottom:12px}
+  .seg button{border:0;background:transparent;color:var(--ink);border-radius:9px;padding:9px 6px;font-size:15px;font-weight:600}
+  .seg button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .seg .son{display:inline-block;min-width:20px;padding:0 6px;margin-left:4px;border-radius:999px;background:var(--pri);color:#fff;font-size:12px;line-height:20px}
+  .seg .son.qizil{background:var(--bad)}
+  .edo-mazmun{margin:0 0 8px 34px;font-size:15px}
+  .edo-rez{margin:0 0 8px 34px;font-size:13px;color:var(--mut);border-left:3px solid var(--line);padding-left:8px}
+  .acts button.asosiy{background:var(--pri);color:#fff;border-color:var(--pri)}
+  .vaqt{color:var(--mut);font-size:12px;text-align:center;margin:4px 0 10px}
+
   #toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#15202b;
     color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;
     max-width:90%;text-align:center;opacity:0;transition:opacity .25s;pointer-events:none}
@@ -164,13 +175,27 @@
     <button onclick="qulfla()">🔒</button>
   </header>
   <main>
-    <div id="ogoh"></div>
-    <div class="stats" id="stats"></div>
-    <input class="search" id="q" type="search" placeholder="Qidirish: obyekt, buyurtmachi, raqam…" oninput="chiz()">
-    <div class="filters" id="filters"></div>
-    <div id="list"></div>
+    <div class="seg">
+      <button id="segIsh" class="on" onclick="rejim('ish')">📋 Ishlar</button>
+      <button id="segEdo" onclick="rejim('edo')">📥 EDO <span id="edoSon"></span></button>
+    </div>
+    <div id="ishView">
+      <div id="ogoh"></div>
+      <div class="stats" id="stats"></div>
+      <input class="search" id="q" type="search" placeholder="Qidirish: obyekt, buyurtmachi, raqam…" oninput="chiz()">
+      <div class="filters" id="filters"></div>
+      <div id="list"></div>
+    </div>
+    <div id="edoView" class="hidden">
+      <div id="edoOgoh"></div>
+      <div class="stats" id="edoStats"></div>
+      <input class="search" id="eq" type="search" placeholder="Qidirish: raqam, kimdan, mazmun…" oninput="edoChiz()">
+      <div class="filters" id="edoFilters"></div>
+      <div class="vaqt" id="edoVaqt"></div>
+      <div id="edoList"></div>
+    </div>
   </main>
-  <button class="fab" onclick="ochForm()">＋ Yangi ish</button>
+  <button class="fab" id="fab" onclick="ochForm()">＋ Yangi ish</button>
 </section>
 
 <!-- ===== Forma ===== -->
@@ -321,7 +346,7 @@ async function kirish(){
   } catch(e){ $('pinMsg').textContent='Ulanishda xato: '+(e.message||e); pin=''; pinChiz(); }
   band(false);
 }
-function qulfla(jim){ if(TOKEN && !jim) server('logout', TOKEN).catch(()=>{}); TOKEN=null; DATA=[]; $('list').innerHTML=''; korsat('pinScr'); }
+function qulfla(jim){ if(TOKEN && !jim) server('logout', TOKEN).catch(()=>{}); TOKEN=null; DATA=[]; EDO=[]; $('list').innerHTML=''; $('edoList').innerHTML=''; korsat('pinScr'); }
 
 let _qt; function faollik(){ clearTimeout(_qt); if(TOKEN) _qt=setTimeout(()=>{ qulfla(); toast('Avtomatik qulflandi'); }, AUTO_QULF_DAQ*60000); }
 ['click','keydown','touchstart','input'].forEach(ev=>document.addEventListener(ev, faollik, {passive:true}));
@@ -331,7 +356,97 @@ document.addEventListener('visibilitychange', ()=>{ if(document.hidden) window._
 /* ---------- Ro'yxat ---------- */
 async function yangila(){
   band(true);
+  const edo = server('edoRoyxat', TOKEN).then(d=>{ EDO = d || []; edoChiz(); }).catch(()=>{});  // EDO bo'lmasa ham ishlar ochilaveradi
   try { DATA = await server('royxat', TOKEN); chiz(); } catch(e){ if(TOKEN) toast('Yuklab bo\'lmadi: '+(e.message||e)); }
+  await edo;
+  band(false);
+}
+
+/* ---------- EDO: topshiriq va murojaatlar ---------- */
+let EDO = [], EFILTR = 'faol', REJIM = 'ish';
+function rejim(r){
+  REJIM = r;
+  $('segIsh').classList.toggle('on', r==='ish'); $('segEdo').classList.toggle('on', r==='edo');
+  $('ishView').classList.toggle('hidden', r!=='ish'); $('edoView').classList.toggle('hidden', r!=='edo');
+  $('fab').classList.toggle('hidden', r!=='ish');
+  window.scrollTo(0,0);
+}
+function edoHolat(r){
+  const faol = !/^Bajarilgan/.test(r.holat||'');
+  const k = kunQoldi(r.muddat);
+  return { faol, k, kechikkan: faol && k!=null && k<0 };
+}
+function edoMuddat(r, h){
+  if (!r.muddat) return h.faol ? { cls:'m-yashil', chap:'Muddatsiz', ong:r.holat } : null;
+  const sana = sanaUz(r.muddat), k = h.k;
+  if (!h.faol) return { cls:'m-tugadi', chap:'✓ Muddat: '+sana, ong:'Bajarilgan' };
+  if (k < 0)   return { cls:'m-qizil', chap:'🔴 Muddat o\'tdi: '+sana, ong:(-k)+' kun kechikdi' };
+  if (k === 0) return { cls:'m-bugun', chap:'🟠 Muddat BUGUN: '+sana, ong:'Bugun javob berish kerak' };
+  if (k <= 3)  return { cls:'m-sariq', chap:'🟡 Muddat: '+sana, ong:k+' kun qoldi' };
+  return { cls:'m-yashil', chap:'🟢 Muddat: '+sana, ong:k+' kun qoldi' };
+}
+const EFILTRLAR = [['faol','Bajarilmagan'],['kechikkan','Muddati o\'tgan'],['Topshiriq','Topshiriqlar'],['Murojaat','Murojaatlar'],['bajarilgan','Bajarilgan'],['hammasi','Hammasi']];
+function edoChiz(){
+  let faol=0, kech=0, bugunS=0;
+  EDO.forEach(r=>{ const h=edoHolat(r); if(h.faol){ faol++; if(h.kechikkan) kech++; if(h.k===0) bugunS++; } });
+  $('edoSon').textContent = faol || '';
+  $('edoSon').className = faol ? 'son'+(kech?' qizil':'') : '';
+  $('edoStats').innerHTML = `<div class="stat"><b>${faol}</b><small>Bajarilmagan</small></div>
+    <div class="stat"><b style="${kech?'color:var(--bad)':''}">${kech}</b><small>Muddati o'tgan</small></div>
+    <div class="stat"><b>${EDO.filter(r=>r.tur==='Murojaat'&&edoHolat(r).faol).length}</b><small>Murojaatlar</small></div>`;
+  let og='';
+  if (bugunS) og += `<div class="ogoh bugun" onclick="EFILTR='faol';edoChiz()">🔔 Bugun muddati tugaydi: ${bugunS} ta hujjat</div>`;
+  if (kech) og += `<div class="ogoh otgan" onclick="EFILTR='kechikkan';edoChiz()">⚠ Muddati o'tgan: ${kech} ta hujjat<small>Ko'rish ›</small></div>`;
+  $('edoOgoh').innerHTML = og;
+  $('edoFilters').innerHTML = EFILTRLAR.map(([k,t])=>`<button class="${EFILTR===k?'on':''}" onclick="EFILTR='${k}';edoChiz()">${t}</button>`).join('');
+
+  const q = $('eq').value.trim().toLowerCase();
+  const rows = EDO.filter(r=>{
+    const h = edoHolat(r);
+    if (EFILTR==='faol' && !h.faol) return false;
+    if (EFILTR==='kechikkan' && !h.kechikkan) return false;
+    if (EFILTR==='bajarilgan' && h.faol) return false;
+    if ((EFILTR==='Topshiriq'||EFILTR==='Murojaat') && r.tur!==EFILTR) return false;
+    if (!q) return true;
+    return [r.reg,r.kimdan,r.mazmun,r.rez,r.ijrochilar].join(' ').toLowerCase().includes(q);
+  });
+  // Bajarilmaganlar: muddati yaqinroq birinchi; qolganlari: yangi kelgani birinchi
+  if (EFILTR==='faol'||EFILTR==='kechikkan') rows.sort((a,b)=>(a.muddat||'9999').localeCompare(b.muddat||'9999'));
+
+  $('edoVaqt').textContent = EDO.length ? 'EDO dan avtomatik olinadi (kompyuterdagi Chrome kengaytmasi orqali)' : '';
+  if (!rows.length) { $('edoList').innerHTML = `<div class="empty">${EDO.length?'Hech narsa topilmadi':'EDO hujjatlari hali kelmagan.<br>Kompyuterda Chrome kengaytmasi o\'rnatilganini tekshiring.'}</div>`; return; }
+
+  $('edoList').innerHTML = rows.map(r=>{
+    const h = edoHolat(r), m = edoMuddat(r, h);
+    const ikon = r.tur==='Murojaat' ? '📨' : '📌';
+    const edoUrl = 'https://edo.ijro.uz/workflow/inbox/' + (r.tur==='Murojaat' ? 'for-appeal' : 'for-execution') + '/search';
+    const tags = [`<span class="tag">${ikon} ${esc(r.tur)}</span>`];
+    if (r.ijrochilar) tags.push(`<span class="tag">👤 ${esc(r.ijrochilar)}</span>`);
+    if (r.ishRow) tags.push(`<span class="tag ok">✓ Ishlarga qo'shilgan</span>`);
+    return `<div class="item ${m?m.cls:''}">
+      <div class="top"><span class="no">${ikon}</span><span class="ttl">${esc(r.reg)} — ${esc(r.kimdan||'—')}</span></div>
+      <div class="sub">Hujjat sanasi: ${sanaUz(r.sana)||'—'}</div>
+      ${r.mazmun?`<div class="edo-mazmun">${esc(r.mazmun)}</div>`:''}
+      ${r.rez?`<div class="edo-rez">✍ ${esc(r.rez)}</div>`:''}
+      ${m?`<div class="mud ${m.cls}"><span>${m.chap}</span><small>${esc(m.ong)}</small></div>`:''}
+      <div class="tags">${tags.join('')}</div>
+      <div class="acts">
+        ${r.fayl&&r.fayl.url?`<a href="${esc(r.fayl.url)}" target="_blank">📄 Hujjat</a>`:''}
+        <a href="${edoUrl}" target="_blank">🔗 EDO</a>
+        ${r.ishRow?`<button onclick="ochForm(${Number(r.ishRow)})">✎ Ishni ochish</button>`
+                  :`<button class="asosiy" onclick="edoIshga('${esc(r.id)}')">＋ Ishga qo'shish</button>`}
+      </div></div>`;
+  }).join('');
+}
+async function edoIshga(id){
+  band(true);
+  try {
+    const res = await server('edoIshgaQosh', TOKEN, id);
+    toast(res.oldin ? 'Bu hujjat avval qo\'shilgan' : '✓ Ishlar ro\'yxatiga qo\'shildi');
+    await yangila();
+    rejim('ish');
+    if (DATA.find(x=>x.row===res.row)) ochForm(res.row);   // telefon, lokatsiya va boshqalarni to'ldirish uchun
+  } catch(e){ toast('Qo\'shilmadi: '+(e.message||e), 4000); }
   band(false);
 }
 
