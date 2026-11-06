@@ -176,6 +176,35 @@
     background:var(--card);color:var(--pri2);font-size:15px;font-weight:600}
   .oflayn{background:#fff4d1;color:#8a5a00;border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:10px}
   @media (prefers-color-scheme: dark){ .oflayn{background:#3d3212;color:#ffd666} }
+
+  /* Havolalar va sozlamalar */
+  .hguruh{margin:0 0 14px;padding:4px 0;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .hguruh h3{margin:0;padding:12px 14px 6px;font-size:13px;color:var(--mut);font-weight:600;letter-spacing:.2px}
+  .havola{display:flex;align-items:center;gap:12px;padding:11px 14px;text-decoration:none;color:var(--ink);border-top:1px solid var(--line)}
+  .havola:first-of-type{border-top:0}
+  .havola .ik{width:34px;height:34px;flex:none;border-radius:9px;background:var(--chip);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .havola .mt{flex:1;min-width:0}
+  .havola .mt b{display:block;font-size:15px;font-weight:600}
+  .havola .mt small{display:block;color:var(--mut);font-size:12.5px;overflow-wrap:anywhere}
+  .havola .ok{color:var(--mut);font-size:18px}
+  .havola:active{background:var(--chip)}
+  .ornat{padding:14px}
+  .ornat button{width:100%;border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:600;background:var(--pri);color:#fff}
+  .ornat p{margin:8px 0 0;font-size:13.5px;color:var(--mut);line-height:1.5}
+  .nusxa{border:1px solid var(--line);background:transparent;color:var(--pri2);border-radius:8px;padding:6px 10px;font-size:13px;flex:none}
+
+  /* Kompyuter ekrani: keng, ikki-uch ustunli */
+  @media (min-width: 900px){
+    #listScr main, #havolaScr main{max-width:1180px}
+    #list, #edoList{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:12px;align-items:start}
+    #list .item, #edoList .item{margin:0}
+    #list .empty, #edoList .empty, #edoList .yana{grid-column:1/-1}
+    .stats{grid-template-columns:repeat(3,minmax(0,240px))}
+    .seg, .ebolim{max-width:720px}
+    .search{max-width:720px}
+    #havolaScr main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+    #havolaScr .hguruh{margin:0}
+  }
 </style>
 </head>
 <body>
@@ -207,6 +236,7 @@
   <header>
     <h1>Ishlar ro'yxati</h1>
     <button id="yBtn" onclick="yangila()" aria-label="Yangilash">↻</button>
+    <button onclick="havolalar()" aria-label="Havolalar va sozlamalar">⚙️</button>
     <button onclick="qulfla()" aria-label="Qulflash">🔒</button>
   </header>
   <main>
@@ -231,6 +261,16 @@
     </div>
   </main>
   <button class="fab" id="fab" onclick="ochForm()">＋ Yangi ish</button>
+</section>
+
+<!-- ===== Havolalar va sozlamalar ===== -->
+<section id="havolaScr" class="hidden">
+  <header>
+    <button onclick="korsat('listScr')" aria-label="Orqaga">←</button>
+    <h1>Havolalar va sozlamalar</h1>
+    <button onclick="qulfla()" aria-label="Qulflash">🔒</button>
+  </header>
+  <main id="havolaMain"></main>
 </section>
 
 <!-- ===== Forma ===== -->
@@ -336,7 +376,7 @@ const F = () => $('f').elements;
 function toast(t, ms){ const e=$('toast'); e.textContent=t; e.classList.add('on');
   clearTimeout(toast._t); toast._t=setTimeout(()=>e.classList.remove('on'), ms||2500); }
 function band(on){ $('busy').classList.toggle('hidden', !on); }
-function korsat(id){ ['kirishScr','pinScr','listScr','formScr'].forEach(s=>$(s).classList.toggle('hidden', s!==id)); window.scrollTo(0,0); }
+function korsat(id){ ['kirishScr','pinScr','listScr','formScr','havolaScr'].forEach(s=>$(s).classList.toggle('hidden', s!==id)); window.scrollTo(0,0); }
 function num(v){ if(v===''||v==null) return null; const n=Number(String(v).replace(/[^\d.-]/g,'')); return isNaN(n)?null:n; }
 function pul(n){ return n==null ? '—' : Math.round(n).toLocaleString('ru-RU').replace(/,/g,' ') + " so'm"; }
 function bugun(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
@@ -811,6 +851,65 @@ function faylTanlandi(el){
   const f = el.files && el.files[0]; if (!f) return;
   if (f.size > MAX_MB*1024*1024) { toast(`Fayl juda katta (${MAX_MB} MB dan oshmasin)`, 4000); el.value=''; return; }
   $('faylJoriy').innerHTML = `📎 ${esc(f.name)} <small>(${(f.size/1024/1024).toFixed(1)} MB) — “Saqlash” bosilganda yuklanadi</small>`;
+}
+
+/* ---------- Havolalar (keyin topolmay qolmaslik uchun) va kompyuterga o'rnatish ---------- */
+const LOYIHA = (SB_URL.match(/^https:\/\/([^.]+)\./) || [])[1] || '';
+const SBD = 'https://supabase.com/dashboard/project/' + LOYIHA;
+const SKRIPT = '1uc48Janizv9feN5oyUVZjlFwAWkk96vFIzgfga8HPndx54n5XUen_HCl';
+const HAVOLALAR = [
+  ['📱 Dastur', [
+    ['🌐', 'Sayt (shu dastur)', 'https://alizamon-q.github.io/ishlar/', 'Telefon va kompyuterda ochiladi'],
+    ['🐙', 'GitHub — dastur kodi', 'https://github.com/alizamon-q/ishlar', 'Akkaunt: alizamon-q'],
+    ['⬆️', 'GitHub — yangilanish yuklash', 'https://github.com/alizamon-q/ishlar/upload/main', 'index.html, sw.js va boshqa fayllar shu yerga']
+  ]],
+  ['🗄 Baza — Supabase', [
+    ['⚡', 'Supabase loyihasi (Alizamon)', SBD, 'Kirish: GitHub akkaunti orqali · loyiha: ' + LOYIHA],
+    ['📋', 'Jadvallar (ishlar, edo)', SBD + '/editor', 'Ma\'lumotlarni ko\'rish va tuzatish'],
+    ['👤', 'Foydalanuvchilar', SBD + '/auth/users', 'Dasturga kirish paroli shu yerda almashtiriladi'],
+    ['📎', 'Fayllar (PDF, xulosalar)', SBD + '/storage/buckets/fayllar', 'EDO hujjatlari va yuklangan xulosalar'],
+    ['🧮', 'SQL Editor', SBD + '/sql/new', 'supabase.sql shu yerda ishga tushirilgan'],
+    ['🔑', 'API kalitlari', SBD + '/settings/api-keys', 'Publishable kalit dasturda · secret kalitni hech kimga bermang']
+  ]],
+  ['📊 Google', [
+    ['📗', 'Google jadval — kunlik zaxira', 'https://docs.google.com/spreadsheets/d/1erZxMx-oWc_hu6dYhh62n_LUs9uvN0rVjkla2fWXMKs/edit', 'Har kuni 8:00 da yangilanadi — qo\'lda tahrirlamang'],
+    ['📜', 'Apps Script (Code.gs)', 'https://script.google.com/home/projects/' + SKRIPT + '/edit', 'Zaxira, eslatma va Telegram xabarlari'],
+    ['🕘', 'Apps Script — ishlash tarixi', 'https://script.google.com/home/projects/' + SKRIPT + '/executions', 'Kunlik zaxira ishladimi — shu yerda ko\'rinadi'],
+    ['📁', 'Google Drive', 'https://drive.google.com/drive/my-drive', 'Eski xulosa fayllari (Alizamon ishlar — Xulosalar)']
+  ]],
+  ['📥 EDO va xabarlar', [
+    ['🏛', 'edo.ijro.uz', 'https://edo.ijro.uz/workflow/inbox/for-execution/search', 'Kompyuterda E-imzo bilan kirilgan tursin'],
+    ['🤖', 'Telegram BotFather', 'https://t.me/BotFather', 'Eslatma botini sozlash']
+  ]]
+];
+let ORNAT = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); ORNAT = e; if (!$('havolaScr').classList.contains('hidden')) havolaChiz(); });
+window.addEventListener('appinstalled', () => { ORNAT = null; toast('✓ Dastur o\'rnatildi'); havolaChiz(); });
+const ornatilgan = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+async function ornatish(){ if (!ORNAT) return; ORNAT.prompt(); try { await ORNAT.userChoice; } catch(e){} ORNAT = null; havolaChiz(); }
+function nusxa(t){ (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(()=>toast('Nusxalandi: '+t), ()=>toast(t, 5000)); }
+function havolalar(){ havolaChiz(); korsat('havolaScr'); }
+function havolaChiz(){
+  const ios = /iPhone|iPad/.test(navigator.userAgent);
+  const ornatBlok = ornatilgan()
+    ? '<p>✓ Dastur shu qurilmaga o\'rnatilgan.</p>'
+    : (ORNAT ? '<button onclick="ornatish()">💻 Shu qurilmaga dastur sifatida o\'rnatish</button>' : '') +
+      '<p>' + (ios ? 'iPhone: pastdagi «Ulashish» ⬆ → «На экран Домой».'
+        : 'Kompyuterda: Chrome yoki Edge manzil qatorining o\'ng tomonidagi 💻⬇ belgisini bosing, yoki ⋮ menyu → «Установить приложение / Сохранить и поделиться → Установить». Telefonda: ⋮ → «Добавить на гл. экран».') + '</p>';
+  const s = ls.get('sb_sessiya');
+  $('havolaMain').innerHTML =
+    `<div class="hguruh"><h3>💻 O'RNATISH</h3><div class="ornat">${ornatBlok}</div></div>` +
+    HAVOLALAR.map(([sar, ro]) => `<div class="hguruh"><h3>${esc(sar.toUpperCase())}</h3>` +
+      ro.map(([ik, nom, url, iz]) => `<a class="havola" href="${esc(url)}" target="_blank" rel="noopener">
+        <span class="ik">${ik}</span><span class="mt"><b>${esc(nom)}</b><small>${esc(iz||url)}</small></span><span class="ok">›</span></a>`).join('') + '</div>').join('') +
+    `<div class="hguruh"><h3>🧩 CHROME KENGAYTMASI</h3>
+      <div class="havola"><span class="ik">🧩</span><span class="mt"><b>EDO → Alizamon ishlar</b>
+        <small>Kompyuterda manzil qatoriga yozing: chrome://extensions</small></span>
+        <button class="nusxa" onclick="nusxa('chrome://extensions')">Nusxa</button></div></div>` +
+    `<div class="hguruh"><h3>👤 AKKAUNT</h3>
+      <div class="havola"><span class="ik">✉️</span><span class="mt"><b>${esc(s && s.email || '—')}</b>
+        <small>Dasturga kirish (Supabase foydalanuvchisi). Parolni unutsangiz — «Foydalanuvchilar» havolasidan almashtiriladi.</small></span></div>
+      <a class="havola" href="#" onclick="chiqish();return false"><span class="ik">🚪</span><span class="mt"><b>Akkauntdan chiqish</b><small>Keyingi safar email va parol so'raladi</small></span></a></div>`;
 }
 
 /* ---------- Boshlanish ---------- */
