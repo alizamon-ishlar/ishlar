@@ -1,0 +1,33 @@
+{
+  "name": "alizamon-ishlar",
+  "productName": "Alizamon ishlar",
+  "version": "3.0.0",
+  "description": "Alizamon ishlar — ishlar ro'yxati va EDO hujjatlari (Windows dasturi)",
+  "main": "main.js",
+  "author": "Alizamon",
+  "appUrl": "https://alizamon-ishlar.github.io/ishlar/",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "uz.alizamon.ishlar",
+    "productName": "Alizamon ishlar",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "edo-yigish.js", "tray.png", "build/icon.png", "package.json"],
+    "win": { "icon": "build/icon.png", "target": ["nsis", "portable"] },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Alizamon ishlar",
+      "artifactName": "Alizamon-ishlar-Setup.exe"
+    },
+    "portable": { "artifactName": "Alizamon-ishlar-Portable.exe" }
+  }
+}

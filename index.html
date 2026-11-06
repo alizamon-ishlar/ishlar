@@ -163,6 +163,15 @@
   #kirishScr form{width:100%;max-width:320px}
   #kirishScr input{background:#fff;color:#15202b;margin-bottom:10px;border:0}
   #kirishScr button{width:100%;border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:600;background:#fff;color:var(--pri)}
+  .ktab{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(255,255,255,.14);border-radius:12px;padding:4px;width:100%;max-width:320px;margin-bottom:14px}
+  #kirishScr .ktab button{background:transparent;color:#fff;padding:9px;font-size:14px;border-radius:9px}
+  #kirishScr .ktab button.on{background:#fff;color:var(--pri)}
+  .exeHavola{margin-top:22px;color:#fff;opacity:.8;font-size:14px}
+  .edoPanel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
+  .edoPanel .mt{flex:1;min-width:180px}
+  .edoPanel small{display:block;color:var(--mut);font-size:12.5px}
+  .edoPanel button{border:1px solid var(--line);background:var(--bg);color:var(--pri2);border-radius:10px;padding:8px 12px;font-size:14px}
+  .edoPanel button.asosiy{background:var(--pri);color:#fff;border-color:var(--pri)}
   #kirishXabar{min-height:22px;font-size:14px;color:#ffd2d2;margin:4px 0 10px;text-align:center}
   .pinChiq{margin-top:22px;background:transparent;border:0;color:#fff;opacity:.75;font-size:14px;text-decoration:underline}
   header button.aylan{animation:sp 1s linear infinite}
@@ -212,13 +221,21 @@
 <!-- ===== Bazaga kirish (bir marta) ===== -->
 <section id="kirishScr" class="hidden">
   <h2>Alizamon ishlar</h2>
-  <p>Bir marta kiring — keyin faqat PIN-kod so'raladi</p>
-  <form onsubmit="emailKirish();return false" autocomplete="on">
-    <input id="kEmail" type="email" placeholder="Email" autocomplete="username" required>
-    <input id="kParol" type="password" placeholder="Parol" autocomplete="current-password" required>
+  <p id="kSarlavha">Bir marta kiring — keyin faqat PIN-kod so'raladi</p>
+  <div class="ktab" id="kTab">
+    <button type="button" id="kTabKir" class="on" onclick="kRejim('kirish')">Kirish</button>
+    <button type="button" id="kTabRo" onclick="kRejim('royxat')">Ro'yxatdan o'tish</button>
+  </div>
+  <form onsubmit="kYubor();return false" autocomplete="on">
+    <input id="kEmail" type="email" placeholder="Email" autocomplete="username">
+    <input id="kParol" type="password" placeholder="Parol" autocomplete="current-password">
+    <input id="kParol2" class="hidden" type="password" placeholder="Parolni takrorlang" autocomplete="new-password">
+    <input id="kKod" class="hidden" placeholder="Taklif kodi (masalan ALIZAMON-XXXXXX)" autocapitalize="characters" autocomplete="off">
     <div id="kirishXabar"></div>
-    <button type="submit">Kirish</button>
+    <button type="submit" id="kBtn">Kirish</button>
   </form>
+  <a class="exeHavola" id="exeHavola" target="_blank" rel="noopener">💻 Windows uchun dastur (.exe)</a>
+  <button class="pinChiq hidden" id="kBoshqa" onclick="chiqish(true)">Boshqa akkaunt bilan kirish</button>
 </section>
 
 <!-- ===== PIN ekrani ===== -->
@@ -253,6 +270,7 @@
       <div id="list"></div>
     </div>
     <div id="edoView" class="hidden">
+      <div id="edoPanel"></div>
       <div class="ebolim" id="eBolim"></div>
       <div id="edoOgoh"></div>
       <input class="search" id="eq" type="search" placeholder="Qidirish: raqam, kimdan, mazmun…" oninput="EKOR=EBET;edoChiz()">
@@ -391,7 +409,14 @@ const ls = {
 
 /* ---------- Supabase mijozi (kutubxonasiz) ---------- */
 function sessiyaSaqla(j){ ls.set('sb_sessiya', { access:j.access_token, refresh:j.refresh_token,
-  tugaydi: Date.now() + (Number(j.expires_in)||3600)*1000, email: j.user && j.user.email }); }
+  tugaydi: Date.now() + (Number(j.expires_in)||3600)*1000, email: j.user && j.user.email, uid: j.user && j.user.id }); }
+const UID = () => (ls.get('sb_sessiya') || {}).uid || '';
+async function rpc(fn, args){ return sb('/rest/v1/rpc/'+fn, { method:'POST', body: args || {} }); }
+async function anonRpc(fn, args){
+  const r = await fetch(SB_URL+'/rest/v1/rpc/'+fn, { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body: JSON.stringify(args||{}) });
+  const j = await r.json().catch(()=>null); if (!r.ok) throw new Error((j && j.message) || ('Server: '+r.status)); return j;
+}
+async function menOl(){ const m = await rpc('men'); ls.set('men', m); return m || {}; }
 async function sbToken(){
   const s = ls.get('sb_sessiya');
   if (!s || !s.refresh) return null;
@@ -428,7 +453,7 @@ async function sbHammasi(path){
 }
 const xavfsizNom = s => String(s||'fayl').replace(/[^A-Za-z0-9._-]+/g,'_').slice(-80) || 'fayl';
 async function faylYukla(papka, file){
-  const yol = papka + '/' + Date.now() + '_' + xavfsizNom(file.name);
+  const yol = UID() + '/' + papka + '/' + Date.now() + '_' + xavfsizNom(file.name);
   await sb('/storage/v1/object/fayllar/'+yol, { method:'POST', raw:true, body:file,
     headers:{ 'Content-Type': file.type || 'application/octet-stream', 'x-upsert':'true' } });
   return yol;
@@ -448,26 +473,82 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ---------- Kirish (bir marta) ---------- */
-function kirishKerak(){ OCHIQ=false; korsat('kirishScr'); }
+function kirishKerak(){ OCHIQ=false; kRejim('kirish'); }
+let K_REJIM = 'kirish';
+function kRejim(r){
+  K_REJIM = r; const roy = r==='royxat', kod = r==='kod';
+  $('kTab').classList.toggle('hidden', kod); $('kBoshqa').classList.toggle('hidden', !kod);
+  $('kTabKir').classList.toggle('on', r==='kirish'); $('kTabRo').classList.toggle('on', roy);
+  $('kEmail').classList.toggle('hidden', kod); $('kParol').classList.toggle('hidden', kod);
+  $('kParol2').classList.toggle('hidden', !roy); $('kKod').classList.toggle('hidden', !(roy||kod));
+  $('kParol').placeholder = roy ? 'Parol (kamida 6 belgi)' : 'Parol';
+  $('kBtn').textContent = kod ? 'Tasdiqlash' : roy ? 'Ro\'yxatdan o\'tish' : 'Kirish';
+  $('kSarlavha').textContent = kod ? 'Akkauntingiz hali faollashtirilmagan — sizga berilgan taklif kodini kiriting'
+    : roy ? 'Dastur egasi bergan taklif kodi bilan ro\'yxatdan o\'ting' : 'Bir marta kiring — keyin faqat PIN-kod so\'raladi';
+  $('kirishXabar').textContent = '';
+  korsat('kirishScr');
+}
+function kYubor(){ return K_REJIM==='kirish' ? emailKirish() : K_REJIM==='royxat' ? royxatdanOtish() : kodniTasdiqla(); }
+const xatoMatn = e => (e && e.message === 'Failed to fetch') ? 'Internet aloqasi yo\'q' : (e && e.message) || String(e);
+async function kirgandanKeyin(){
+  const m = await menOl();
+  if (!m.azo) return kRejim('kod');
+  pinBosqich(ls.get('pin_hash') ? 'kirish' : 'yangi');
+}
 async function emailKirish(){
   const email = $('kEmail').value.trim(), parol = $('kParol').value;
+  if (!email || !parol) { $('kirishXabar').textContent = 'Email va parolni kiriting'; return; }
   $('kirishXabar').textContent = ''; band(true);
   try {
     const r = await fetch(SB_URL+'/auth/v1/token?grant_type=password', { method:'POST',
       headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ email, password: parol }) });
     const j = await r.json().catch(()=>({}));
-    if (!r.ok) throw new Error(j.error_description || j.msg || 'Email yoki parol noto\'g\'ri');
+    if (!r.ok) throw new Error(/confirm/i.test(j.error_description||j.msg||'') ? 'Email hali tasdiqlanmagan — pochtangizdagi xatni oching' : 'Email yoki parol noto\'g\'ri');
     sessiyaSaqla(j); $('kParol').value='';
-    pinBosqich(ls.get('pin_hash') ? 'kirish' : 'yangi');
-  } catch(e){ $('kirishXabar').textContent = e.message === 'Failed to fetch' ? 'Internet aloqasi yo\'q' : e.message; }
+    await kirgandanKeyin();
+  } catch(e){ $('kirishXabar').textContent = xatoMatn(e); }
   band(false);
 }
-function chiqish(){
-  if (!confirm('Akkauntdan chiqasizmi? Keyingi safar email va parol so\'raladi.')) return;
+async function royxatdanOtish(){
+  const email = $('kEmail').value.trim(), parol = $('kParol').value, kod = $('kKod').value.trim().toUpperCase();
+  const x = t => { $('kirishXabar').textContent = t; };
+  if (!/^\S+@\S+\.\S+$/.test(email)) return x('Email to\'g\'ri kiritilmagan');
+  if (parol.length < 6) return x('Parol kamida 6 belgi bo\'lsin');
+  if (parol !== $('kParol2').value) return x('Ikki parol bir xil emas');
+  if (!kod) return x('Taklif kodini kiriting');
+  x(''); band(true);
+  try {
+    if (!(await anonRpc('kod_tekshir', { p_kod: kod }))) throw new Error('Taklif kodi noto\'g\'ri yoki muddati tugagan');
+    const r = await fetch(SB_URL+'/auth/v1/signup', { method:'POST',
+      headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body: JSON.stringify({ email, password: parol }) });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) {
+      const m = j.msg || j.error_description || j.message || '';
+      throw new Error(/already|registered|exists/i.test(m) ? 'Bu email allaqachon ro\'yxatdan o\'tgan — «Kirish» bo\'limidan kiring'
+        : /disabled|not allowed/i.test(m) ? 'Ro\'yxatdan o\'tish yopiq — dastur egasiga murojaat qiling' : (m || 'Ro\'yxatdan o\'tib bo\'lmadi'));
+    }
+    if (!j.access_token) { kRejim('kirish'); $('kirishXabar').textContent = 'Pochtangizga tasdiqlash xati yuborildi. Tasdiqlab, «Kirish» orqali kiring.'; band(false); return; }
+    sessiyaSaqla(j);
+    await rpc('kodni_ishlat', { p_kod: kod });
+    $('kParol').value = ''; $('kParol2').value = ''; $('kKod').value = '';
+    await kirgandanKeyin();
+  } catch(e){ x(xatoMatn(e)); }
+  band(false);
+}
+async function kodniTasdiqla(){
+  const kod = $('kKod').value.trim().toUpperCase();
+  if (!kod) { $('kirishXabar').textContent = 'Taklif kodini kiriting'; return; }
+  band(true);
+  try { await rpc('kodni_ishlat', { p_kod: kod }); $('kKod').value=''; await kirgandanKeyin(); }
+  catch(e){ $('kirishXabar').textContent = xatoMatn(e); }
+  band(false);
+}
+function chiqish(jim){
+  if (!jim && !confirm('Akkauntdan chiqasizmi? Keyingi safar email va parol so\'raladi.')) return;
   const s = ls.get('sb_sessiya');
   if (s && s.access) fetch(SB_URL+'/auth/v1/logout', { method:'POST', headers:{ apikey:SB_KEY, Authorization:'Bearer '+s.access } }).catch(()=>{});
-  ['sb_sessiya','pin_hash','kesh_v2','pin_xato'].forEach(ls.del);
-  DATA=[]; EDO=[]; OCHIQ=false; korsat('kirishScr');
+  ['sb_sessiya','pin_hash','kesh_v2','pin_xato','men'].forEach(ls.del);
+  DATA=[]; EDO=[]; OCHIQ=false; kRejim('kirish');
 }
 
 /* ---------- PIN (telefonning o'zida tekshiriladi) ---------- */
@@ -507,8 +588,9 @@ async function pinTayyor(){
 }
 function ochildi(){
   OCHIQ = true; $('pinMsg').textContent='';
-  keshdanOl(); korsat('listScr'); chiz(); edoChiz(); faollik();
+  keshdanOl(); korsat('listScr'); chiz(); edoChiz(); edoPanel(); faollik();
   yangila();
+  menOl().then(m => { if (m && m.azo === false) { OCHIQ=false; kRejim('kod'); } }).catch(()=>{});
 }
 function qulfla(){ OCHIQ=false; DATA=[]; EDO=[]; $('list').innerHTML=''; $('edoList').innerHTML=''; pinBosqich('kirish'); }
 
@@ -529,7 +611,8 @@ function ishUi(d){
 }
 function keshdanOl(){
   const k = ls.get('kesh_v2');
-  if (k && Array.isArray(k.ishlar)) KESH = k;
+  if (k && Array.isArray(k.ishlar) && k.uid === UID()) KESH = k;
+  else if (KESH.uid !== UID()) KESH = { uid: UID(), ishlar:[], edo:[], ishVaqt:null, edoVaqt:null, vaqt:0 };
   DATA = KESH.ishlar.map(ishUi).sort((a,b)=>(a.n||0)-(b.n||0)||a.row-b.row);
   EDO = KESH.edo.slice();
 }
@@ -538,7 +621,7 @@ function birlashtir(eski, yangi){
   const m = new Map(eski.map(x=>[x.id,x])); yangi.forEach(x=>m.set(x.id,x)); return [...m.values()];
 }
 const engKechi = (a, v) => a.reduce((m,x)=> x.updated_at > (m||'') ? x.updated_at : m, v);
-function keshgaYoz(){ KESH.vaqt = Date.now(); if (!ls.set('kesh_v2', KESH)) { /* joy tugasa — mazmun bilan emas, faqat ro'yxat */ } }
+function keshgaYoz(){ KESH.vaqt = Date.now(); KESH.uid = UID(); if (!ls.set('kesh_v2', KESH)) { /* joy tugasa — mazmun bilan emas, faqat ro'yxat */ } }
 
 async function yangila(jim){
   if (!OCHIQ || yangila._ish) return;
@@ -857,29 +940,39 @@ function faylTanlandi(el){
 const LOYIHA = (SB_URL.match(/^https:\/\/([^.]+)\./) || [])[1] || '';
 const SBD = 'https://supabase.com/dashboard/project/' + LOYIHA;
 const SKRIPT = '1uc48Janizv9feN5oyUVZjlFwAWkk96vFIzgfga8HPndx54n5XUen_HCl';
+// GitHub manzili saytning o'z manzilidan olinadi (repo boshqa akkaunt/tashkilotga ko'chsa ham to'g'ri qoladi)
+const GH_EGA  = /\.github\.io$/.test(location.hostname) ? location.hostname.split('.')[0] : 'alizamon-q';
+const GH_REPO = /\.github\.io$/.test(location.hostname) ? (location.pathname.split('/')[1] || GH_EGA + '.github.io') : 'ishlar';
+const SAYT    = location.origin + location.pathname.replace(/index\.html$/, '');
+const EXE_URL = 'https://github.com/' + GH_EGA + '/' + GH_REPO + '/releases/latest/download/Alizamon-ishlar-Setup.exe';
+const KENG_URL = SAYT + 'edo-kengaytma.zip';
 const HAVOLALAR = [
   ['📱 Dastur', [
-    ['🌐', 'Sayt (shu dastur)', 'https://alizamon-q.github.io/ishlar/', 'Telefon va kompyuterda ochiladi'],
-    ['🐙', 'GitHub — dastur kodi', 'https://github.com/alizamon-q/ishlar', 'Akkaunt: alizamon-q'],
-    ['⬆️', 'GitHub — yangilanish yuklash', 'https://github.com/alizamon-q/ishlar/upload/main', 'index.html, sw.js va boshqa fayllar shu yerga']
+    ['💻', 'Windows uchun dastur (.exe)', EXE_URL, 'Kompyuterga o\'rnatiladi; EDO hujjatlarini o\'zi olib keladi'],
+    ['🧩', 'Chrome kengaytmasi (zip)', KENG_URL, 'EDO ni Chrome orqali olish uchun (zaxira yo\'l)'],
+    ['🌐', 'Sayt (shu dastur)', SAYT, 'Telefon va kompyuterda ochiladi'],
+    ['🐙', 'GitHub — dastur kodi', 'https://github.com/' + GH_EGA + '/' + GH_REPO, 'Egasi: ' + GH_EGA],
+    ['⬆️', 'GitHub — yangilanish yuklash', 'https://github.com/' + GH_EGA + '/' + GH_REPO + '/upload/main', 'index.html, sw.js va boshqa fayllar shu yerga', 1],
+    ['🏗', 'GitHub — .exe yig\'ilishi', 'https://github.com/' + GH_EGA + '/' + GH_REPO + '/actions', 'Windows dasturi shu yerda avtomatik yasaladi', 1]
   ]],
   ['🗄 Baza — Supabase', [
     ['⚡', 'Supabase loyihasi (Alizamon)', SBD, 'Kirish: GitHub akkaunti orqali · loyiha: ' + LOYIHA],
+    ['🎟', 'Taklif kodlari va a\'zolar', SBD + '/editor', 'taklif_kodlari jadvali: yangi kod qo\'shish yoki o\'chirish (faol = false)'],
     ['📋', 'Jadvallar (ishlar, edo)', SBD + '/editor', 'Ma\'lumotlarni ko\'rish va tuzatish'],
     ['👤', 'Foydalanuvchilar', SBD + '/auth/users', 'Dasturga kirish paroli shu yerda almashtiriladi'],
     ['📎', 'Fayllar (PDF, xulosalar)', SBD + '/storage/buckets/fayllar', 'EDO hujjatlari va yuklangan xulosalar'],
     ['🧮', 'SQL Editor', SBD + '/sql/new', 'supabase.sql shu yerda ishga tushirilgan'],
     ['🔑', 'API kalitlari', SBD + '/settings/api-keys', 'Publishable kalit dasturda · secret kalitni hech kimga bermang']
-  ]],
+  ], 1],
   ['📊 Google', [
     ['📗', 'Google jadval — kunlik zaxira', 'https://docs.google.com/spreadsheets/d/1erZxMx-oWc_hu6dYhh62n_LUs9uvN0rVjkla2fWXMKs/edit', 'Har kuni 8:00 da yangilanadi — qo\'lda tahrirlamang'],
     ['📜', 'Apps Script (Code.gs)', 'https://script.google.com/home/projects/' + SKRIPT + '/edit', 'Zaxira, eslatma va Telegram xabarlari'],
     ['🕘', 'Apps Script — ishlash tarixi', 'https://script.google.com/home/projects/' + SKRIPT + '/executions', 'Kunlik zaxira ishladimi — shu yerda ko\'rinadi'],
     ['📁', 'Google Drive', 'https://drive.google.com/drive/my-drive', 'Eski xulosa fayllari (Alizamon ishlar — Xulosalar)']
-  ]],
+  ], 1],
   ['📥 EDO va xabarlar', [
     ['🏛', 'edo.ijro.uz', 'https://edo.ijro.uz/workflow/inbox/for-execution/search', 'Kompyuterda E-imzo bilan kirilgan tursin'],
-    ['🤖', 'Telegram BotFather', 'https://t.me/BotFather', 'Eslatma botini sozlash']
+    ['🤖', 'Telegram BotFather', 'https://t.me/BotFather', 'Eslatma botini sozlash', 1]
   ]]
 ];
 let ORNAT = null;
@@ -896,11 +989,14 @@ function havolaChiz(){
     : (ORNAT ? '<button onclick="ornatish()">💻 Shu qurilmaga dastur sifatida o\'rnatish</button>' : '') +
       '<p>' + (ios ? 'iPhone: pastdagi «Ulashish» ⬆ → «На экран Домой».'
         : 'Kompyuterda: Chrome yoki Edge manzil qatorining o\'ng tomonidagi 💻⬇ belgisini bosing, yoki ⋮ menyu → «Установить приложение / Сохранить и поделиться → Установить». Telefonda: ⋮ → «Добавить на гл. экран».') + '</p>';
-  const s = ls.get('sb_sessiya');
+  const s = ls.get('sb_sessiya'), admin = !!(ls.get('men') || {}).admin;
+  const desk = DESK ? `<div class="hguruh"><h3>🖥 KOMPYUTER DASTURI</h3>
+      <a class="havola" href="#" onclick="DESK.edoOch();return false"><span class="ik">🏛</span><span class="mt"><b>EDO oynasini ochish</b><small>edo.ijro.uz ga E-imzo bilan shu yerda kiring — hujjatlar har ${EDO_DAQIQA} daqiqada o'zi olinadi</small></span><span class="ok">›</span></a>
+      <a class="havola" href="#" onclick="avtostartAlmashtir();return false"><span class="ik">⚙️</span><span class="mt"><b>Windows bilan birga ishga tushish: <span id="avtoHolat">…</span></b><small>Yoqilgan bo'lsa, kompyuter yoqilganda fonda ishlaydi</small></span></a></div>` : '';
   $('havolaMain').innerHTML =
-    `<div class="hguruh"><h3>💻 O'RNATISH</h3><div class="ornat">${ornatBlok}</div></div>` +
-    HAVOLALAR.map(([sar, ro]) => `<div class="hguruh"><h3>${esc(sar.toUpperCase())}</h3>` +
-      ro.map(([ik, nom, url, iz]) => `<a class="havola" href="${esc(url)}" target="_blank" rel="noopener">
+    (DESK ? desk : `<div class="hguruh"><h3>💻 O'RNATISH</h3><div class="ornat">${ornatBlok}</div></div>`) +
+    HAVOLALAR.filter(g => admin || !g[2]).map(([sar, ro]) => `<div class="hguruh"><h3>${esc(sar.toUpperCase())}</h3>` +
+      ro.filter(h => admin || !h[4]).map(([ik, nom, url, iz]) => `<a class="havola" href="${esc(url)}" target="_blank" rel="noopener">
         <span class="ik">${ik}</span><span class="mt"><b>${esc(nom)}</b><small>${esc(iz||url)}</small></span><span class="ok">›</span></a>`).join('') + '</div>').join('') +
     `<div class="hguruh"><h3>🧩 CHROME KENGAYTMASI</h3>
       <div class="havola"><span class="ik">🧩</span><span class="mt"><b>EDO → Alizamon ishlar</b>
@@ -908,12 +1004,98 @@ function havolaChiz(){
         <button class="nusxa" onclick="nusxa('chrome://extensions')">Nusxa</button></div></div>` +
     `<div class="hguruh"><h3>👤 AKKAUNT</h3>
       <div class="havola"><span class="ik">✉️</span><span class="mt"><b>${esc(s && s.email || '—')}</b>
-        <small>Dasturga kirish (Supabase foydalanuvchisi). Parolni unutsangiz — «Foydalanuvchilar» havolasidan almashtiriladi.</small></span></div>
+        <small>${admin ? 'Dastur egasi (admin). Parolni unutsangiz — «Foydalanuvchilar» havolasidan almashtiriladi.' : 'Parolni unutsangiz — dastur egasiga murojaat qiling.'}</small></span></div>
       <a class="havola" href="#" onclick="chiqish();return false"><span class="ik">🚪</span><span class="mt"><b>Akkauntdan chiqish</b><small>Keyingi safar email va parol so'raladi</small></span></a></div>`;
+  if (DESK) DESK.avtostart().then(v => { const e = $('avtoHolat'); if (e) e.textContent = v ? 'yoqilgan ✓' : 'o\'chirilgan'; }).catch(()=>{});
+}
+async function avtostartAlmashtir(){ const v = await DESK.avtostart(); await DESK.avtostart(!v); havolaChiz(); }
+
+/* ---------- Kompyuter dasturi (.exe): EDO hujjatlarini o'zi olib keladi ---------- */
+const DESK = window.desktop || null;
+const EDO_DAQIQA = 10, EDO_MAXFAYL = 15;
+const GS_URL = 'https://script.google.com/macros/s/AKfycbzt8rACa66RkoR1VzCaA1oBVjyqGcXRtqoiK8-nN4pVm-LqDKUKpsfOu3M1AURrGigW/exec';
+const BOLIM_NOMI = { ijro:'Ijro uchun', murojaat:'Murojaat', malumot:'Ma\'lumot uchun' };
+function b64dan(b64){ const s = atob(b64); const u = new Uint8Array(s.length); for (let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+const sanaYoki = v => (/^\d{4}-\d\d-\d\d$/.test(v||'') ? v : null);
+function edoHolatSaqla(h){ ls.set('edo_holat_'+UID(), { vaqt: Date.now(), ...h }); edoPanel(); }
+function edoPanel(ish){
+  const el = $('edoPanel'); if (!el) return;
+  if (!DESK) { el.innerHTML = ''; return; }
+  const h = ls.get('edo_holat_'+UID());
+  const vaqt = h ? (Math.round((Date.now()-h.vaqt)/60000) < 1 ? 'hozirgina' : Math.round((Date.now()-h.vaqt)/60000)+' daqiqa oldin') : '';
+  let matn;
+  if (ish || edoSinxron._ish) matn = '<b>🖥 EDO tekshirilmoqda…</b>';
+  else if (!h) matn = '<b>🖥 EDO hali tekshirilmagan</b><small>Dastur ochilgandan bir necha soniyada boshlanadi</small>';
+  else if (h.ok) matn = `<b>🖥 EDO ulangan ✓</b><small>Tekshirildi ${vaqt}${h.qoldi ? ' · yana '+h.qoldi+' ta fayl navbatda' : ''}${(h.xatolar||[]).length ? ' · ⚠ '+esc(h.xatolar.join('; ')) : ''}</small>`;
+  else if (h.login === false) matn = `<b>⚠ EDO ga kirilmagan</b><small>«EDO ga kirish» ni bosib, E-imzo bilan kiring</small>`;
+  else matn = `<b>⚠ EDO xatosi</b><small>${esc(h.xabar||'')} · ${vaqt}</small>`;
+  el.innerHTML = `<div class="edoPanel"><span class="mt">${matn}</span>
+    <button class="${h && h.login===false ? 'asosiy' : ''}" onclick="DESK.edoOch()">🏛 EDO ${h && h.login===false ? 'ga kirish' : 'oynasi'}</button>
+    <button onclick="edoSinxron(true)">↻ Tekshirish</button></div>`;
+}
+async function edoSinxron(qolda){
+  if (!DESK || edoSinxron._ish || !ls.get('sb_sessiya')) return;
+  const men = ls.get('men'); if (!men || !men.azo) return;
+  edoSinxron._ish = true; edoPanel(true);
+  try {
+    const bazada = await sbHammasi('/rest/v1/edo?select=id,toliq');
+    const borIds = new Set(bazada.map(r => r.id));
+    const toliqlar = bazada.filter(r => r.toliq).map(r => r.id);
+    const tk = 'edo_tarix_' + UID(), tarixOlindi = !!ls.get(tk);
+    const r = await DESK.edoYigish(toliqlar, EDO_MAXFAYL, !tarixOlindi);
+    if (!r || r.login === false) { edoHolatSaqla({ ok:false, login:false }); if (qolda) DESK.edoOch(); return; }
+    for (const it of r.items) {
+      if (!it.fayl || !it.fayl.b64) continue;
+      const yol = UID() + '/edo/' + it.doc_id + '/' + xavfsizNom(it.fayl.nom);
+      try {
+        await sb('/storage/v1/object/fayllar/'+yol, { method:'POST', raw:true,
+          body: new Blob([b64dan(it.fayl.b64)], { type: it.fayl.mime || 'application/pdf' }),
+          headers:{ 'Content-Type': it.fayl.mime || 'application/pdf', 'x-upsert':'true' } });
+        it.fayl_path = yol; it.fayl_nom = it.fayl.nom;
+      } catch(e){ it.xato = 'Fayl yuklanmadi: ' + e.message; }
+      delete it.fayl;
+    }
+    const asos = it => ({ id:it.id, bolim:it.bolim, reg:it.reg, raqam:it.raqam, sana:sanaYoki(it.sana), kimdan:it.kimdan,
+      rez:it.rez, muddat:sanaYoki(it.muddat), holat:it.holat, oqilgan:it.oqilgan, ijrochilar:it.ijrochilar,
+      doc_id:it.doc_id, recipient_id:it.recipient_id, kelgan: it.kelganMs ? new Date(it.kelganMs).toISOString() : null });
+    const toliqQ = r.items.filter(it => it.mazmun !== undefined).map(it => ({ ...asos(it), mazmun:it.mazmun, jurnal:it.jurnal,
+      fayl_path: it.fayl_path || null, fayl_nom: it.fayl_nom || null, toliq: !it.xato, xato: it.xato || null }));
+    const oddiy = r.items.filter(it => it.mazmun === undefined).map(asos);
+    for (const q of [oddiy, toliqQ]) for (let i = 0; i < q.length; i += 300)
+      await sb('/rest/v1/edo?on_conflict=egasi,id', { method:'POST', body:q.slice(i, i+300), headers:{ Prefer:'resolution=merge-duplicates,return=minimal' } });
+    for (const [bolim, toliq] of Object.entries(r.faolToliq || {})) {
+      if (!toliq) continue;
+      const faollar = r.items.filter(it => it.bolim === bolim && it.holat < 20).map(it => it.id);
+      await sb('/rest/v1/edo?bolim=eq.'+bolim+'&holat=lt.20' + (faollar.length ? '&id=not.in.('+faollar.map(encodeURIComponent).join(',')+')' : ''),
+        { method:'PATCH', body:{ holat:20 }, headers:{ Prefer:'return=minimal' } });
+    }
+    const yangilar = r.items.filter(it => !borIds.has(it.id) && it.holat < 20);
+    if (tarixOlindi && yangilar.length) {
+      const qisqa = it => (it.bolim==='murojaat' ? '📨 ' : it.bolim==='malumot' ? 'ℹ️ ' : '📌 ') + it.reg + ' — ' + String(it.kimdan||'').slice(0,60);
+      try { new Notification('EDO: ' + yangilar.length + ' ta yangi hujjat', { body: yangilar.slice(0,3).map(qisqa).join('\n') }); } catch(e){}
+      if (men.admin) {
+        const matn = yangilar.map(it => qisqa(it) + ' (' + BOLIM_NOMI[it.bolim] + ')' + (it.mazmun ? '\n' + it.mazmun.slice(0,200) : '') +
+          (it.rez ? '\n✍ ' + it.rez.slice(0,150) : '') + (it.muddat ? '\n⏰ Muddat: ' + sanaUz(it.muddat) : '')).join('\n\n');
+        const t = await sbToken();
+        fetch(GS_URL, { method:'POST', mode:'no-cors', body: JSON.stringify({ fn:'edoXabar', args:[t, '📥 EDO: ' + yangilar.length + ' ta yangi hujjat', matn] }) }).catch(()=>{});
+      }
+    }
+    if (!tarixOlindi && !(r.xatolar||[]).length) ls.set(tk, true);
+    edoHolatSaqla({ ok:true, qoldi: r.navbatdaQoldi || 0, xatolar: r.xatolar || [] });
+    if (OCHIQ) yangila(true);
+  } catch(e){ edoHolatSaqla({ ok:false, xabar: xatoMatn(e) }); }
+  finally { edoSinxron._ish = false; edoPanel(); }
+}
+if (DESK) {
+  setTimeout(() => edoSinxron(), 15000);
+  setInterval(() => edoSinxron(), EDO_DAQIQA * 60000);
 }
 
 /* ---------- Boshlanish ---------- */
-if (!ls.get('sb_sessiya')) korsat('kirishScr');
+$('exeHavola').href = EXE_URL; if (DESK) $('exeHavola').classList.add('hidden');
+const MEN0 = ls.get('men');
+if (!ls.get('sb_sessiya')) kRejim('kirish');
+else if (MEN0 && MEN0.azo === false) kRejim('kod');
 else if (!ls.get('pin_hash')) pinBosqich('yangi');
 else pinBosqich('kirish');
 </script>
